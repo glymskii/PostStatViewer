@@ -1,5 +1,4 @@
-import type { BrowserContext, Page } from "playwright-core";
-// Page is imported for the isThreadsLoggedIn helper signature below.
+import type { BrowserContext } from "playwright-core";
 import {
   parseCompactNumber,
   randomDelay,
@@ -26,21 +25,18 @@ function extractThreadsId(url: string): string | null {
   return null;
 }
 
-async function isThreadsLoggedIn(page: Page): Promise<boolean> {
-  try {
-    await page.goto("https://www.threads.net/", {
-      waitUntil: "domcontentloaded",
-      timeout: 15000,
-    });
-    await randomDelay(2000, 4000);
-    // If threads.net cookies are present, we land on feed with no "Log in" CTA.
-    const loginCta = await page.$(
-      'a[href*="/login"], div[role="button"]:has-text("Log in"), a:has-text("Log in")'
-    );
-    return !loginCta;
-  } catch {
-    return false;
-  }
+/**
+ * Check if the browser context has a valid threads.net session cookie.
+ * Cookie-based check is more reliable than DOM inspection — Threads' markup
+ * is opaque and login CTAs can appear in modals even for authenticated users.
+ */
+async function hasThreadsSession(context: BrowserContext): Promise<boolean> {
+  const cookies = await context.cookies("https://www.threads.net/");
+  return cookies.some(
+    (c) =>
+      (c.name === "sessionid" || c.name === "ig_did") &&
+      c.domain.includes("threads.net")
+  );
 }
 
 /**
@@ -54,13 +50,13 @@ async function threadsSsoHandoff(
   context: BrowserContext,
   igUsername: string
 ): Promise<void> {
+  if (await hasThreadsSession(context)) {
+    console.log("[threads] Already has threads.net session cookies");
+    return;
+  }
+
   const page = await context.newPage();
   try {
-    if (await isThreadsLoggedIn(page)) {
-      console.log("[threads] Already logged in via saved session");
-      return;
-    }
-
     console.log("[threads] Performing Meta SSO handoff from Instagram...");
     await page.goto("https://www.threads.net/login", {
       waitUntil: "domcontentloaded",
@@ -68,41 +64,53 @@ async function threadsSsoHandoff(
     });
     await randomDelay(2000, 4000);
 
-    // Threads login page shows "Continue with Instagram" / "Continue as @user"
-    // when an IG session cookie is present. Try multiple selectors defensively.
-    const continueSelectors = [
+    // Threads login page shows "Continue as @username" when a valid IG session
+    // cookie is present in this browser context. We only click that specific
+    // button — never a generic "Continue" which could be the credentials
+    // form's submit button.
+    const ssoSelectors = [
       `div[role="button"]:has-text("Continue as ${igUsername}")`,
       `div[role="button"]:has-text("Continue as @${igUsername}")`,
       `a:has-text("Continue as ${igUsername}")`,
-      'div[role="button"]:has-text("Continue with Instagram")',
-      'a:has-text("Continue with Instagram")',
-      'button:has-text("Continue")',
+      `a:has-text("Continue as @${igUsername}")`,
+      `button:has-text("Continue as ${igUsername}")`,
+      `button:has-text("Continue as @${igUsername}")`,
     ];
 
     let clicked = false;
-    for (const selector of continueSelectors) {
+    for (const selector of ssoSelectors) {
       const btn = await page.$(selector);
       if (btn) {
         console.log(`[threads] Clicking SSO button: ${selector}`);
-        await btn.click();
+        await Promise.all([
+          page
+            .waitForURL((url) => !url.pathname.includes("/login"), {
+              timeout: 15000,
+            })
+            .catch(() => null),
+          btn.click(),
+        ]);
         clicked = true;
         break;
       }
     }
 
     if (!clicked) {
-      const visible = await page.$$eval("body", (els) =>
-        els[0]?.innerText?.slice(0, 500)
-      );
+      const snippet = (
+        await page.$eval("body", (el) => el.innerText.slice(0, 800))
+      )
+        .replace(/\s+/g, " ")
+        .trim();
+      const url = page.url();
       throw new Error(
-        `Threads SSO button not found. Page snippet: ${visible?.replace(/\s+/g, " ")}`
+        `Threads SSO "Continue as ${igUsername}" button not found at ${url}. Page: ${snippet}`
       );
     }
 
-    await randomDelay(4000, 6000);
+    await randomDelay(2000, 4000);
 
-    // Dismiss optional post-login prompts.
-    for (const text of ["Not now", "Not Now", "Save info"]) {
+    // Dismiss optional post-SSO prompts ("Save login info?", "Turn on notifications").
+    for (const text of ["Not now", "Not Now", "Save info", "Save Info"]) {
       const btn = await page.$(`button:has-text("${text}")`);
       if (btn) {
         await btn.click();
@@ -110,9 +118,17 @@ async function threadsSsoHandoff(
       }
     }
 
-    if (!(await isThreadsLoggedIn(page))) {
+    if (!(await hasThreadsSession(context))) {
+      const snippet = (
+        await page
+          .$eval("body", (el) => el.innerText.slice(0, 800))
+          .catch(() => "<no body>")
+      )
+        .replace(/\s+/g, " ")
+        .trim();
+      const url = page.url();
       throw new Error(
-        "Threads SSO handoff completed but session not verified on threads.net"
+        `Threads SSO handoff clicked but no sessionid cookie set. URL=${url} Page=${snippet}`
       );
     }
     console.log("[threads] SSO handoff successful");
