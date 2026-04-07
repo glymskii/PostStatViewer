@@ -124,7 +124,14 @@ export async function runScrapeForAccount(
   const context = await createBrowserContext({ platform: account.platform });
 
   try {
-    const loggedIn = await scraper.ensureLoggedIn(context);
+    let loggedIn = false;
+    try {
+      loggedIn = await scraper.ensureLoggedIn(context);
+    } catch (authErr) {
+      // Preserve the specific error message from the scraper's login flow.
+      const msg = authErr instanceof Error ? authErr.message : String(authErr);
+      throw new Error(`[${account.platform} auth] ${msg}`);
+    }
     if (!loggedIn) {
       throw new Error(`Failed to authenticate scraper for ${account.platform}`);
     }

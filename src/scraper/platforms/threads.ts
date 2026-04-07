@@ -1,10 +1,12 @@
 import type { BrowserContext, Page } from "playwright-core";
+// Page is imported for the isThreadsLoggedIn helper signature below.
 import {
   parseCompactNumber,
   randomDelay,
   saveState,
 } from "@/scraper/common/stealth";
 import type { PlatformScraper, ScrapedItem } from "@/scraper/common/types";
+import { instagramScraper } from "@/scraper/platforms/instagram";
 
 const PLATFORM = "threads" as const;
 const MAX_POSTS = 12;
@@ -24,101 +26,82 @@ function extractThreadsId(url: string): string | null {
   return null;
 }
 
-async function typeHumanLike(page: Page, selector: string, text: string) {
-  await page.click(selector);
-  for (const char of text) {
-    await page.keyboard.type(char, {
-      delay: Math.floor(Math.random() * 100) + 50,
-    });
-  }
-}
-
-async function isLoggedIn(page: Page): Promise<boolean> {
+async function isThreadsLoggedIn(page: Page): Promise<boolean> {
   try {
     await page.goto("https://www.threads.net/", {
       waitUntil: "domcontentloaded",
       timeout: 15000,
     });
     await randomDelay(2000, 4000);
-    // Threads shows a "Log in" button on the homepage when unauthenticated.
-    // When logged in we typically see the composer / feed with no login prompt.
-    const loginButton = await page.$(
+    // If threads.net cookies are present, we land on feed with no "Log in" CTA.
+    const loginCta = await page.$(
       'a[href*="/login"], div[role="button"]:has-text("Log in"), a:has-text("Log in")'
     );
-    if (loginButton) return false;
-    // Cross-check: presence of search nav or compose button when authenticated.
-    const composeOrNav = await page.$(
-      'a[href="/search"], svg[aria-label*="Search"], svg[aria-label*="New thread"]'
-    );
-    return !!composeOrNav;
+    return !loginCta;
   } catch {
     return false;
   }
 }
 
-async function loginToThreads(
+/**
+ * Perform the Meta SSO handoff from Instagram → Threads. Assumes the context
+ * already carries a valid instagram.com session (the Instagram scraper logs
+ * in first and shares the storage state via stealth.ts STATE_KEY). Visits
+ * threads.net/login, clicks the "Continue as @{username}" button, and waits
+ * for threads.net cookies to be set.
+ */
+async function threadsSsoHandoff(
   context: BrowserContext,
-  username: string,
-  password: string
-): Promise<boolean> {
+  igUsername: string
+): Promise<void> {
   const page = await context.newPage();
   try {
-    if (await isLoggedIn(page)) {
+    if (await isThreadsLoggedIn(page)) {
       console.log("[threads] Already logged in via saved session");
-      await page.close();
-      return true;
+      return;
     }
 
-    console.log("[threads] Logging in via Instagram credentials...");
+    console.log("[threads] Performing Meta SSO handoff from Instagram...");
     await page.goto("https://www.threads.net/login", {
       waitUntil: "domcontentloaded",
-      timeout: 15000,
+      timeout: 20000,
     });
     await randomDelay(2000, 4000);
 
-    // Threads login form: username + password fields. Field names vary; try
-    // common selectors. Instagram credentials work because Threads is Meta.
-    const usernameSelector = await page
-      .waitForSelector(
-        'input[autocomplete="username"], input[name="username"], input[placeholder*="sername"], input[placeholder*="email"]',
-        { timeout: 10000 }
-      )
-      .catch(() => null);
-    const passwordSelector = await page
-      .waitForSelector(
-        'input[autocomplete="current-password"], input[name="password"], input[type="password"]',
-        { timeout: 10000 }
-      )
-      .catch(() => null);
+    // Threads login page shows "Continue with Instagram" / "Continue as @user"
+    // when an IG session cookie is present. Try multiple selectors defensively.
+    const continueSelectors = [
+      `div[role="button"]:has-text("Continue as ${igUsername}")`,
+      `div[role="button"]:has-text("Continue as @${igUsername}")`,
+      `a:has-text("Continue as ${igUsername}")`,
+      'div[role="button"]:has-text("Continue with Instagram")',
+      'a:has-text("Continue with Instagram")',
+      'button:has-text("Continue")',
+    ];
 
-    if (!usernameSelector || !passwordSelector) {
-      console.error("[threads] Login form not found");
-      await page.close();
-      return false;
+    let clicked = false;
+    for (const selector of continueSelectors) {
+      const btn = await page.$(selector);
+      if (btn) {
+        console.log(`[threads] Clicking SSO button: ${selector}`);
+        await btn.click();
+        clicked = true;
+        break;
+      }
     }
 
-    const usernameSel =
-      'input[autocomplete="username"], input[name="username"], input[placeholder*="sername"], input[placeholder*="email"]';
-    const passwordSel =
-      'input[autocomplete="current-password"], input[name="password"], input[type="password"]';
-
-    await typeHumanLike(page, usernameSel, username);
-    await randomDelay(500, 1000);
-    await typeHumanLike(page, passwordSel, password);
-    await randomDelay(500, 1500);
-
-    // Submit: try button[type=submit] or div[role=button] with "Log in" text.
-    const submit = await page.$(
-      'button[type="submit"], div[role="button"]:has-text("Log in")'
-    );
-    if (submit) {
-      await submit.click();
-    } else {
-      await page.keyboard.press("Enter");
+    if (!clicked) {
+      const visible = await page.$$eval("body", (els) =>
+        els[0]?.innerText?.slice(0, 500)
+      );
+      throw new Error(
+        `Threads SSO button not found. Page snippet: ${visible?.replace(/\s+/g, " ")}`
+      );
     }
+
     await randomDelay(4000, 6000);
 
-    // Dismiss "Save info?" / "Turn on notifications" prompts if any.
+    // Dismiss optional post-login prompts.
     for (const text of ["Not now", "Not Now", "Save info"]) {
       const btn = await page.$(`button:has-text("${text}")`);
       if (btn) {
@@ -127,19 +110,14 @@ async function loginToThreads(
       }
     }
 
-    const ok = await isLoggedIn(page);
-    if (ok) {
-      console.log("[threads] Login successful");
-      await saveState(context, PLATFORM);
-    } else {
-      console.error("[threads] Login failed — could not verify session");
+    if (!(await isThreadsLoggedIn(page))) {
+      throw new Error(
+        "Threads SSO handoff completed but session not verified on threads.net"
+      );
     }
+    console.log("[threads] SSO handoff successful");
+  } finally {
     await page.close();
-    return ok;
-  } catch (err) {
-    console.error("[threads] Login error:", err);
-    await page.close();
-    return false;
   }
 }
 
@@ -413,12 +391,27 @@ export const threadsScraper: PlatformScraper = {
   },
 
   async ensureLoggedIn(context) {
-    const username = process.env.INSTAGRAM_USERNAME;
-    const password = process.env.INSTAGRAM_PASSWORD;
-    if (!username || !password) {
-      throw new Error("Instagram credentials not configured (Threads reuses them)");
+    const igUsername = process.env.INSTAGRAM_USERNAME;
+    if (!igUsername) {
+      throw new Error(
+        "INSTAGRAM_USERNAME not configured (Threads reuses Meta SSO)"
+      );
     }
-    return loginToThreads(context, username, password);
+
+    // Step 1: ensure Instagram is logged in. Uses the shared storage state
+    // (see STATE_KEY in stealth.ts) so the cookie jar carries over.
+    const igLoggedIn = await instagramScraper.ensureLoggedIn(context);
+    if (!igLoggedIn) {
+      throw new Error(
+        "Threads requires a valid Instagram session but IG login failed"
+      );
+    }
+
+    // Step 2: perform the threads.net SSO handoff so threads.net cookies
+    // are set. Idempotent — skipped if already logged in.
+    await threadsSsoHandoff(context, igUsername);
+    await saveState(context, PLATFORM);
+    return true;
   },
 
   async scrapeProfile(context, username) {

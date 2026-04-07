@@ -14,11 +14,19 @@ const BROWSER_DATA_DIR =
   path.join(process.cwd(), "data", "browser-data");
 
 /**
- * Per-platform storage state file. Each platform keeps its own cookie jar so
- * Instagram, Threads and TikTok sessions are independent.
+ * Instagram and Threads both authenticate via Meta SSO, so they share the
+ * same cookie jar (`instagram-state.json`). TikTok has its own state file.
+ * This lets Threads inherit a valid Instagram session on Railway prod where
+ * the Instagram scraper has already logged in.
  */
+const STATE_KEY: Record<Platform, string> = {
+  instagram: "instagram",
+  threads: "instagram",
+  tiktok: "tiktok",
+};
+
 export function statePathFor(platform: Platform): string {
-  return path.join(BROWSER_DATA_DIR, `${platform}-state.json`);
+  return path.join(BROWSER_DATA_DIR, `${STATE_KEY[platform]}-state.json`);
 }
 
 export function randomDelay(min: number, max: number): Promise<void> {
