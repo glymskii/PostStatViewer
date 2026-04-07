@@ -6,7 +6,12 @@ import fs from "fs";
 
 chromium.use(StealthPlugin());
 
-const STATE_PATH = path.join(process.cwd(), "browser-data", "state.json");
+// Browser session lives alongside SQLite in the persistent data dir so a single
+// Railway volume mounted at /app/data covers both. Override with BROWSER_DATA_DIR if needed.
+const BROWSER_DATA_DIR =
+  process.env.BROWSER_DATA_DIR ||
+  path.join(process.cwd(), "data", "browser-data");
+const STATE_PATH = path.join(BROWSER_DATA_DIR, "state.json");
 
 function randomDelay(min: number, max: number): Promise<void> {
   const ms = Math.floor(Math.random() * (max - min + 1)) + min;
