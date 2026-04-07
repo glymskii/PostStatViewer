@@ -11,9 +11,10 @@ const db = drizzle(sqlite);
 // Seed initial account
 db.insert(accounts)
   .values({
+    platform: "instagram",
     username: "salam_bro",
     clientName: "Kex Group",
-    reelsUrl: "https://www.instagram.com/salam_bro/reels/",
+    profileUrl: "https://www.instagram.com/salam_bro/reels/",
     isActive: true,
   })
   .onConflictDoNothing()

@@ -44,7 +44,12 @@ export async function GET(request: NextRequest) {
     const latestSnapshot = snapshots[snapshots.length - 1];
 
     return {
-      ...post,
+      id: post.id,
+      externalId: post.externalId,
+      postUrl: post.postUrl,
+      caption: post.caption,
+      thumbnailUrl: post.thumbnailUrl,
+      firstSeenAt: post.firstSeenAt,
       currentViews: latestSnapshot?.viewCount ?? null,
       currentLikes: latestSnapshot?.likeCount ?? null,
       snapshots: snapshots.map((s) => ({

@@ -3,7 +3,7 @@ import {
   runScrapeForAccount,
   runScrapeForAllAccounts,
   isScrapeRunning,
-} from "@/scraper/runner";
+} from "@/scraper/common/runner";
 import { db } from "@/db/client";
 import { scrapeRuns } from "@/db/schema";
 import { desc } from "drizzle-orm";

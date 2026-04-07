@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import Header from "../../components/Header";
-import ViewsChart from "../../components/ViewsChart";
-import ReelTable from "../../components/ReelTable";
+import Header from "../../../components/Header";
+import ViewsChart from "../../../components/ViewsChart";
+import ReelTable from "../../../components/ReelTable";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -15,6 +16,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
+type Platform = "instagram" | "threads" | "tiktok";
+
+const PLATFORM_LABELS: Record<Platform, string> = {
+  instagram: "Instagram",
+  threads: "Threads",
+  tiktok: "TikTok",
+};
+
+const PLATFORM_BADGE_CLASS: Record<Platform, string> = {
+  instagram: "bg-pink-500 hover:bg-pink-600",
+  threads: "bg-black hover:bg-neutral-800",
+  tiktok: "bg-cyan-500 hover:bg-cyan-600",
+};
+
+const PLATFORM_ITEM_LABEL_PLURAL: Record<Platform, string> = {
+  instagram: "Reels",
+  threads: "посты",
+  tiktok: "видео",
+};
+
+const PLATFORM_ADD_PLACEHOLDER: Record<Platform, string> = {
+  instagram: "https://www.instagram.com/reel/ABC123/",
+  threads: "https://www.threads.net/@username/post/ABC123",
+  tiktok: "https://www.tiktok.com/@username/video/1234567890",
+};
 
 interface Snapshot {
   viewCount: number | null;
@@ -24,7 +51,7 @@ interface Snapshot {
 
 interface PostData {
   id: number;
-  instagramId: string;
+  externalId: string;
   postUrl: string;
   caption: string | null;
   thumbnailUrl: string | null;
@@ -36,35 +63,40 @@ interface PostData {
 
 export default function AccountPage() {
   const params = useParams();
-  const slug = params.slug as string;
+  const platform = params.platform as Platform;
+  const username = params.username as string;
   const [posts, setPosts] = useState<PostData[]>([]);
   const [days, setDays] = useState("30");
   const [loading, setLoading] = useState(true);
   const [accountInfo, setAccountInfo] = useState<{
     clientName: string;
     id: number;
+    platform: Platform;
   } | null>(null);
-  const [showAddReel, setShowAddReel] = useState(false);
-  const [reelUrl, setReelUrl] = useState("");
-  const [addingReel, setAddingReel] = useState(false);
-  const [reelError, setReelError] = useState("");
-  const [reelSuccess, setReelSuccess] = useState("");
+  const [showAddPost, setShowAddPost] = useState(false);
+  const [postUrl, setPostUrl] = useState("");
+  const [addingPost, setAddingPost] = useState(false);
+  const [postError, setPostError] = useState("");
+  const [postSuccess, setPostSuccess] = useState("");
 
   useEffect(() => {
     let isFirst = true;
     async function fetchData() {
       if (isFirst) setLoading(true);
       try {
-        // Get account info
         const accountsRes = await fetch("/api/accounts");
         const accounts = await accountsRes.json();
         const account = accounts.find(
-          (a: { username: string }) => a.username === slug
+          (a: { platform: Platform; username: string }) =>
+            a.platform === platform && a.username === username
         );
         if (account) {
-          setAccountInfo({ clientName: account.clientName, id: account.id });
+          setAccountInfo({
+            clientName: account.clientName,
+            id: account.id,
+            platform: account.platform,
+          });
 
-          // Get stats
           const statsRes = await fetch(
             `/api/stats?accountId=${account.id}&days=${days}`
           );
@@ -82,7 +114,7 @@ export default function AccountPage() {
     isFirst = false;
     const interval = setInterval(fetchData, 10000);
     return () => clearInterval(interval);
-  }, [slug, days]);
+  }, [platform, username, days]);
 
   const totalViews = posts.reduce(
     (sum, p) => sum + (p.currentViews ?? 0),
@@ -92,60 +124,45 @@ export default function AccountPage() {
     (sum, p) => sum + (p.currentLikes ?? 0),
     0
   );
-  const avgViews =
-    posts.length > 0 ? Math.round(totalViews / posts.length) : 0;
+  const avgViews = posts.length > 0 ? Math.round(totalViews / posts.length) : 0;
   const topPosts = [...posts]
     .sort((a, b) => (b.currentViews ?? 0) - (a.currentViews ?? 0))
     .slice(0, 10);
 
-  async function handleAddReel(e: React.FormEvent) {
+  async function handleAddPost(e: React.FormEvent) {
     e.preventDefault();
-    if (!reelUrl || !accountInfo) return;
-    setReelError("");
-    setReelSuccess("");
+    if (!postUrl || !accountInfo) return;
+    setPostError("");
+    setPostSuccess("");
 
-    // Client-side duplicate check
-    const idMatch = reelUrl.match(/\/(reel|p)\/([^/?]+)/);
-    if (!idMatch) {
-      setReelError("Неверная ссылка. Пример: https://www.instagram.com/reel/ABC123/");
-      return;
-    }
-    const reelId = idMatch[2];
-    const exists = posts.find((p) => p.instagramId === reelId);
-    if (exists) {
-      setReelError("Этот рилс уже отслеживается");
-      return;
-    }
-
-    setAddingReel(true);
+    setAddingPost(true);
     try {
-      const res = await fetch("/api/reels", {
+      const res = await fetch("/api/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           accountId: accountInfo.id,
-          reelUrl: reelUrl.trim(),
+          postUrl: postUrl.trim(),
         }),
       });
       if (res.ok) {
-        setReelSuccess("Рилс добавлен и данные собраны");
-        setReelUrl("");
-        // Refresh data
+        setPostSuccess("Пост добавлен и данные собраны");
+        setPostUrl("");
         const statsRes = await fetch(
           `/api/stats?accountId=${accountInfo.id}&days=${days}`
         );
         const statsData = await statsRes.json();
         setPosts(statsData);
         setTimeout(() => {
-          setReelSuccess("");
-          setShowAddReel(false);
+          setPostSuccess("");
+          setShowAddPost(false);
         }, 2000);
       } else {
         const data = await res.json();
-        setReelError(data.error || "Ошибка при добавлении");
+        setPostError(data.error || "Ошибка при добавлении");
       }
     } finally {
-      setAddingReel(false);
+      setAddingPost(false);
     }
   }
 
@@ -155,17 +172,22 @@ export default function AccountPage() {
     return num.toLocaleString("ru-RU");
   }
 
+  const itemLabel = PLATFORM_ITEM_LABEL_PLURAL[platform] || "посты";
+
   return (
     <>
       <Header />
       <main className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold">@{slug}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold">@{username}</h1>
+              <Badge className={PLATFORM_BADGE_CLASS[platform]}>
+                {PLATFORM_LABELS[platform]}
+              </Badge>
+            </div>
             {accountInfo && (
-              <p className="text-muted-foreground">
-                {accountInfo.clientName}
-              </p>
+              <p className="text-muted-foreground">{accountInfo.clientName}</p>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -188,12 +210,11 @@ export default function AccountPage() {
           <p className="text-muted-foreground">Загрузка...</p>
         ) : (
           <>
-            {/* Summary cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-muted-foreground">
-                    Всего Reels
+                  <CardTitle className="text-sm text-muted-foreground capitalize">
+                    Всего {itemLabel}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -219,9 +240,7 @@ export default function AccountPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold">
-                    {formatNumber(avgViews)}
-                  </p>
+                  <p className="text-3xl font-bold">{formatNumber(avgViews)}</p>
                 </CardContent>
               </Card>
               <Card>
@@ -238,7 +257,6 @@ export default function AccountPage() {
               </Card>
             </div>
 
-            {/* Chart - top 10 reels trend */}
             {topPosts.some((p) => p.snapshots.length > 0) && (
               <Card className="mb-8">
                 <CardHeader>
@@ -252,61 +270,60 @@ export default function AccountPage() {
               </Card>
             )}
 
-            {/* Table */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Все Reels</CardTitle>
+                <CardTitle className="capitalize">Все {itemLabel}</CardTitle>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    setShowAddReel(!showAddReel);
-                    setReelError("");
-                    setReelSuccess("");
+                    setShowAddPost(!showAddPost);
+                    setPostError("");
+                    setPostSuccess("");
                   }}
                 >
-                  + Добавить рилс
+                  + Добавить пост
                 </Button>
               </CardHeader>
               <CardContent>
-                {showAddReel && (
-                  <form onSubmit={handleAddReel} className="mb-6 space-y-3">
+                {showAddPost && (
+                  <form onSubmit={handleAddPost} className="mb-6 space-y-3">
                     <div className="space-y-1">
                       <Input
-                        placeholder="https://www.instagram.com/reel/ABC123/"
-                        value={reelUrl}
+                        placeholder={PLATFORM_ADD_PLACEHOLDER[platform]}
+                        value={postUrl}
                         onChange={(e) => {
-                          setReelUrl(e.target.value);
-                          setReelError("");
+                          setPostUrl(e.target.value);
+                          setPostError("");
                         }}
                         required
                       />
                       <p className="text-xs text-muted-foreground">
-                        Вставьте прямую ссылку на рилс для отслеживания
+                        Вставьте прямую ссылку на пост для отслеживания
                       </p>
                     </div>
-                    {reelError && (
+                    {postError && (
                       <div className="bg-red-50 border border-red-200 text-red-700 rounded-md px-3 py-2 text-sm">
-                        {reelError}
+                        {postError}
                       </div>
                     )}
-                    {reelSuccess && (
+                    {postSuccess && (
                       <div className="bg-green-50 border border-green-200 text-green-700 rounded-md px-3 py-2 text-sm">
-                        {reelSuccess}
+                        {postSuccess}
                       </div>
                     )}
                     <div className="flex gap-2">
-                      <Button type="submit" size="sm" disabled={addingReel}>
-                        {addingReel ? "Добавление..." : "Добавить"}
+                      <Button type="submit" size="sm" disabled={addingPost}>
+                        {addingPost ? "Добавление..." : "Добавить"}
                       </Button>
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
                         onClick={() => {
-                          setShowAddReel(false);
-                          setReelError("");
-                          setReelSuccess("");
+                          setShowAddPost(false);
+                          setPostError("");
+                          setPostSuccess("");
                         }}
                       >
                         Отмена
@@ -314,7 +331,7 @@ export default function AccountPage() {
                     </div>
                   </form>
                 )}
-                <ReelTable posts={posts} />
+                <ReelTable posts={posts} platform={platform} />
               </CardContent>
             </Card>
           </>

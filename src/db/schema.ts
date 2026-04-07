@@ -1,30 +1,58 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import {
+  sqliteTable,
+  text,
+  integer,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
-export const accounts = sqliteTable("accounts", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  username: text("username").notNull().unique(),
-  clientName: text("client_name").notNull(),
-  reelsUrl: text("reels_url").notNull(),
-  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-  createdAt: text("created_at")
-    .notNull()
-    .default(sql`(datetime('now'))`),
-});
+export const PLATFORMS = ["instagram", "threads", "tiktok"] as const;
+export type Platform = (typeof PLATFORMS)[number];
 
-export const posts = sqliteTable("posts", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  accountId: integer("account_id")
-    .notNull()
-    .references(() => accounts.id),
-  instagramId: text("instagram_id").notNull().unique(),
-  postUrl: text("post_url").notNull(),
-  caption: text("caption"),
-  thumbnailUrl: text("thumbnail_url"),
-  firstSeenAt: text("first_seen_at")
-    .notNull()
-    .default(sql`(datetime('now'))`),
-});
+export const accounts = sqliteTable(
+  "accounts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    platform: text("platform", { enum: PLATFORMS }).notNull(),
+    username: text("username").notNull(),
+    clientName: text("client_name").notNull(),
+    profileUrl: text("profile_url").notNull(),
+    isActive: integer("is_active", { mode: "boolean" })
+      .notNull()
+      .default(true),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (t) => ({
+    platformUsernameUnique: uniqueIndex(
+      "accounts_platform_username_unique"
+    ).on(t.platform, t.username),
+  })
+);
+
+export const posts = sqliteTable(
+  "posts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    externalId: text("external_id").notNull(),
+    postUrl: text("post_url").notNull(),
+    caption: text("caption"),
+    thumbnailUrl: text("thumbnail_url"),
+    firstSeenAt: text("first_seen_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (t) => ({
+    accountExternalUnique: uniqueIndex("posts_account_external_unique").on(
+      t.accountId,
+      t.externalId
+    ),
+  })
+);
 
 export const postSnapshots = sqliteTable("post_snapshots", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -43,7 +71,7 @@ export const scrapeRuns = sqliteTable("scrape_runs", {
   accountId: integer("account_id")
     .notNull()
     .references(() => accounts.id),
-  status: text("status").notNull(), // 'success' | 'failed' | 'partial'
+  status: text("status").notNull(), // 'success' | 'failed' | 'partial' | 'in_progress'
   postsScraped: integer("posts_scraped").notNull().default(0),
   errorMessage: text("error_message"),
   startedAt: text("started_at")

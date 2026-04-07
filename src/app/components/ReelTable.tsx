@@ -2,9 +2,10 @@
 
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import type { Platform } from "@/db/schema";
 
 interface PostData {
-  instagramId: string;
+  externalId: string;
   postUrl: string;
   caption: string | null;
   thumbnailUrl: string | null;
@@ -16,7 +17,14 @@ interface PostData {
 
 interface ReelTableProps {
   posts: PostData[];
+  platform: Platform;
 }
+
+const ITEM_LABEL: Record<Platform, string> = {
+  instagram: "Reel",
+  threads: "Пост",
+  tiktok: "Видео",
+};
 
 function formatNumber(num: number | null): string {
   if (num === null) return "-";
@@ -32,11 +40,8 @@ function formatDate(dateStr: string): string {
   });
 }
 
-function getReelEmbedUrl(instagramId: string): string {
-  return `https://www.instagram.com/reel/${instagramId}/`;
-}
-
-export default function ReelTable({ posts }: ReelTableProps) {
+export default function ReelTable({ posts, platform }: ReelTableProps) {
+  const itemLabel = ITEM_LABEL[platform];
   const sorted = [...posts].sort(
     (a, b) => (b.currentViews ?? 0) - (a.currentViews ?? 0)
   );
@@ -52,13 +57,12 @@ export default function ReelTable({ posts }: ReelTableProps) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
       {sorted.map((post, index) => {
-        const lastSnapshot = post.snapshots[post.snapshots.length - 1];
         const rank = index + 1;
 
         return (
           <a
-            key={post.instagramId}
-            href={getReelEmbedUrl(post.instagramId)}
+            key={post.externalId}
+            href={post.postUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="block"
@@ -69,7 +73,7 @@ export default function ReelTable({ posts }: ReelTableProps) {
                 {post.thumbnailUrl ? (
                   <img
                     src={post.thumbnailUrl}
-                    alt={`Reel ${post.instagramId}`}
+                    alt={`${itemLabel} ${post.externalId}`}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                 ) : (
@@ -87,7 +91,7 @@ export default function ReelTable({ posts }: ReelTableProps) {
                         d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z"
                       />
                     </svg>
-                    <span className="text-xs">Reel</span>
+                    <span className="text-xs">{itemLabel}</span>
                   </div>
                 )}
 
@@ -145,7 +149,7 @@ export default function ReelTable({ posts }: ReelTableProps) {
               {/* Info area */}
               <div className="p-3">
                 <p className="text-sm font-medium leading-snug line-clamp-2 min-h-[2.5rem]">
-                  {post.caption || post.instagramId}
+                  {post.caption || post.externalId}
                 </p>
                 <div className="flex items-center justify-between mt-1">
                   <span className="text-xs text-muted-foreground">

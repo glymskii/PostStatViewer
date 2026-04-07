@@ -1,5 +1,5 @@
 import cron, { type ScheduledTask } from "node-cron";
-import { runScrapeForAllAccounts } from "./runner";
+import { runScrapeForAllAccounts } from "./common/runner";
 
 let currentTask: ScheduledTask | null = null;
 

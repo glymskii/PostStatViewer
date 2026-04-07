@@ -6,9 +6,31 @@ import AccountCard from "./components/AccountCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+type Platform = "instagram" | "threads" | "tiktok";
+
+const PLATFORM_LABELS: Record<Platform, string> = {
+  instagram: "Instagram",
+  threads: "Threads",
+  tiktok: "TikTok",
+};
+
+const PLATFORM_PLACEHOLDERS: Record<Platform, string> = {
+  instagram: "https://instagram.com/salam_bro или @salam_bro",
+  threads: "https://threads.net/@salam_bro или @salam_bro",
+  tiktok: "https://tiktok.com/@salam_bro или @salam_bro",
+};
 
 interface Account {
   id: number;
+  platform: Platform;
   username: string;
   clientName: string;
   isActive: boolean;
@@ -18,11 +40,24 @@ interface Account {
   lastScrapeStatus: string | null;
 }
 
+function extractUsername(input: string, platform: Platform): string {
+  let val = input.trim();
+  const patterns: Record<Platform, RegExp> = {
+    instagram: /instagram\.com\/([^/?#]+)/,
+    threads: /threads\.net\/@?([^/?#]+)/,
+    tiktok: /tiktok\.com\/@?([^/?#]+)/,
+  };
+  const m = val.match(patterns[platform]);
+  if (m) val = m[1];
+  return val.replace(/^@/, "").replace(/\/$/, "");
+}
+
 export default function HomePage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [scrapeRunning, setScrapeRunning] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [newPlatform, setNewPlatform] = useState<Platform>("instagram");
   const [newUsername, setNewUsername] = useState("");
   const [newClientName, setNewClientName] = useState("");
   const [adding, setAdding] = useState(false);
@@ -61,20 +96,17 @@ export default function HomePage() {
     }
   }
 
-  function extractUsername(input: string): string {
-    let val = input.trim();
-    const urlMatch = val.match(/instagram\.com\/([^/?]+)/);
-    if (urlMatch) val = urlMatch[1];
-    return val.replace(/^@/, "").replace(/\/$/, "");
-  }
-
-  function checkDuplicate(input: string): string | null {
-    const username = extractUsername(input);
+  function checkDuplicate(input: string, platform: Platform): string | null {
+    const username = extractUsername(input, platform);
     if (!username) return null;
     const exists = accounts.find(
-      (a) => a.username.toLowerCase() === username.toLowerCase()
+      (a) =>
+        a.platform === platform &&
+        a.username.toLowerCase() === username.toLowerCase()
     );
-    return exists ? `Аккаунт @${username} уже отслеживается (${exists.clientName})` : null;
+    return exists
+      ? `Аккаунт @${username} в ${PLATFORM_LABELS[platform]} уже отслеживается (${exists.clientName})`
+      : null;
   }
 
   async function handleAddAccount(e: React.FormEvent) {
@@ -83,7 +115,7 @@ export default function HomePage() {
     setAddError("");
     setAddSuccess("");
 
-    const dupError = checkDuplicate(newUsername);
+    const dupError = checkDuplicate(newUsername, newPlatform);
     if (dupError) {
       setAddError(dupError);
       return;
@@ -95,13 +127,16 @@ export default function HomePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          platform: newPlatform,
           username: newUsername.trim(),
           clientName: newClientName.trim(),
         }),
       });
       if (res.ok) {
         const added = await res.json();
-        setAddSuccess(`Аккаунт @${added.username} добавлен`);
+        setAddSuccess(
+          `Аккаунт @${added.username} (${PLATFORM_LABELS[added.platform as Platform]}) добавлен`
+        );
         setNewUsername("");
         setNewClientName("");
         fetchData();
@@ -129,6 +164,10 @@ export default function HomePage() {
     );
   }
 
+  const previewUsername = newUsername
+    ? extractUsername(newUsername, newPlatform)
+    : "";
+
   return (
     <>
       <Header />
@@ -142,10 +181,7 @@ export default function HomePage() {
             >
               + Добавить аккаунт
             </Button>
-            <Button
-              onClick={handleScrape}
-              disabled={scrapeRunning}
-            >
+            <Button onClick={handleScrape} disabled={scrapeRunning}>
               {scrapeRunning ? "Сбор данных..." : "Запустить сбор"}
             </Button>
           </div>
@@ -154,17 +190,41 @@ export default function HomePage() {
         {showAddForm && (
           <Card className="mb-6">
             <CardHeader>
-              <CardTitle className="text-lg">Добавить аккаунт для отслеживания</CardTitle>
+              <CardTitle className="text-lg">
+                Добавить аккаунт для отслеживания
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleAddAccount} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">Платформа</label>
+                    <Select
+                      value={newPlatform}
+                      onValueChange={(v) => {
+                        setNewPlatform(v as Platform);
+                        setAddError("");
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="instagram">Instagram</SelectItem>
+                        <SelectItem value="threads">Threads</SelectItem>
+                        <SelectItem value="tiktok">TikTok</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      TikTok пока в разработке (v2.2)
+                    </p>
+                  </div>
                   <div className="space-y-1">
                     <label className="text-sm font-medium">
                       Ссылка или username
                     </label>
                     <Input
-                      placeholder="https://instagram.com/salam_bro или @salam_bro"
+                      placeholder={PLATFORM_PLACEHOLDERS[newPlatform]}
                       value={newUsername}
                       onChange={(e) => {
                         setNewUsername(e.target.value);
@@ -172,12 +232,11 @@ export default function HomePage() {
                       }}
                       required
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Вставьте ссылку на профиль, @username или просто имя пользователя
-                    </p>
-                    {newUsername && (
+                    {previewUsername && (
                       <p className="text-xs text-muted-foreground">
-                        Будет отслеживаться: <span className="font-medium">@{extractUsername(newUsername) || "..."}</span>
+                        Будет отслеживаться:{" "}
+                        <span className="font-medium">@{previewUsername}</span>{" "}
+                        в {PLATFORM_LABELS[newPlatform]}
                       </p>
                     )}
                   </div>
@@ -191,9 +250,6 @@ export default function HomePage() {
                       onChange={(e) => setNewClientName(e.target.value)}
                       required
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Для удобной группировки аккаунтов
-                    </p>
                   </div>
                 </div>
 
@@ -238,6 +294,7 @@ export default function HomePage() {
             {accounts.map((account) => (
               <AccountCard
                 key={account.id}
+                platform={account.platform}
                 username={account.username}
                 clientName={account.clientName}
                 postCount={account.postCount}

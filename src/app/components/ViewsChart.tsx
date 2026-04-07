@@ -18,7 +18,7 @@ interface Snapshot {
 }
 
 interface PostWithSnapshots {
-  instagramId: string;
+  externalId: string;
   postUrl: string;
   caption: string | null;
   currentViews: number | null;
@@ -75,7 +75,7 @@ export default function ViewsChart({ posts, title }: ViewsChartProps) {
     };
     posts.forEach((post) => {
       const snapshot = post.snapshots.find((s) => s.scrapedAt === timestamp);
-      point[post.instagramId] = snapshot?.viewCount ?? null;
+      point[post.externalId] = snapshot?.viewCount ?? null;
     });
     return point;
   });
@@ -102,14 +102,14 @@ export default function ViewsChart({ posts, title }: ViewsChartProps) {
           <Legend />
           {posts.map((post, i) => (
             <Line
-              key={post.instagramId}
+              key={post.externalId}
               type="monotone"
-              dataKey={post.instagramId}
+              dataKey={post.externalId}
               stroke={COLORS[i % COLORS.length]}
               strokeWidth={2}
               dot={{ r: 3 }}
               connectNulls
-              name={post.caption ? post.caption.substring(0, 30) : post.instagramId.substring(0, 10)}
+              name={post.caption ? post.caption.substring(0, 30) : post.externalId.substring(0, 10)}
             />
           ))}
         </LineChart>

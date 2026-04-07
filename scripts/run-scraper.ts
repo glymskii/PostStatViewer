@@ -1,6 +1,6 @@
 import { config } from "dotenv";
 config({ path: ".env.local" });
-import { runScrapeForAllAccounts } from "../src/scraper/runner";
+import { runScrapeForAllAccounts } from "../src/scraper/common/runner";
 
 async function main() {
   console.log("Starting manual scrape...");
