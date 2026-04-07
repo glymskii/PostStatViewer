@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      # Persist SQLite database and browser sessions between restarts
+      - ./data:/app/data
+      - ./browser-data:/app/browser-data
+    env_file:
+      - .env.local
+    restart: unless-stopped
