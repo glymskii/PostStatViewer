@@ -43,7 +43,7 @@ async function isLoggedIn(page: Page): Promise<boolean> {
     await randomDelay(1500, 3000);
     if (page.url().includes("/accounts/login/")) return false;
     // Sanity: a login form on this page also means we got bounced.
-    const loginForm = await page.$('input[name="username"]');
+    const loginForm = await page.$('input[name="email"]');
     return !loginForm;
   } catch {
     return false;
@@ -91,7 +91,7 @@ async function loginToInstagram(
 
     // Wait for the login form — increased timeout, IG sometimes loads slowly.
     try {
-      await page.waitForSelector('input[name="username"]', { timeout: 20000 });
+      await page.waitForSelector('input[name="email"]', { timeout: 20000 });
     } catch {
       // Diagnostic: dump page state so we can see what's blocking.
       const diag = await page
@@ -107,11 +107,11 @@ async function loginToInstagram(
       console.error(
         `[instagram] Login form not found; page=${JSON.stringify(diag)}`
       );
-      throw new Error("Login form input[name='username'] not found");
+      throw new Error("Login form input[name='email'] not found");
     }
-    await typeHumanLike(page, 'input[name="username"]', username);
+    await typeHumanLike(page, 'input[name="email"]', username);
     await randomDelay(500, 1000);
-    await typeHumanLike(page, 'input[name="password"]', password);
+    await typeHumanLike(page, 'input[name="pass"]', password);
     await randomDelay(500, 1500);
     await page.click('button[type="submit"]');
     await randomDelay(3000, 5000);
