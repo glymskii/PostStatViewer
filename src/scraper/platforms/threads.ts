@@ -10,6 +10,11 @@ import { instagramScraper } from "@/scraper/platforms/instagram";
 const PLATFORM = "threads" as const;
 const MAX_POSTS = 12;
 
+// Threads moved its public domain from threads.net → threads.com in 2025;
+// threads.net still works as a 301 redirect but cookies and the login UI
+// are served from threads.com.
+const THREADS_HOST = "https://www.threads.com";
+
 /**
  * Threads post URLs:
  *   https://www.threads.net/@username/post/CXXXxxx
@@ -26,16 +31,19 @@ function extractThreadsId(url: string): string | null {
 }
 
 /**
- * Check if the browser context has a valid threads.net session cookie.
+ * Check if the browser context has a valid threads.com session cookie.
  * Cookie-based check is more reliable than DOM inspection — Threads' markup
  * is opaque and login CTAs can appear in modals even for authenticated users.
  */
 async function hasThreadsSession(context: BrowserContext): Promise<boolean> {
-  const cookies = await context.cookies("https://www.threads.net/");
+  const cookies = await context.cookies([
+    "https://www.threads.com/",
+    "https://www.threads.net/",
+  ]);
   return cookies.some(
     (c) =>
-      (c.name === "sessionid" || c.name === "ig_did") &&
-      c.domain.includes("threads.net")
+      c.name === "sessionid" &&
+      (c.domain.includes("threads.com") || c.domain.includes("threads.net"))
   );
 }
 
@@ -43,31 +51,33 @@ async function hasThreadsSession(context: BrowserContext): Promise<boolean> {
  * Perform the Meta SSO handoff from Instagram → Threads. Assumes the context
  * already carries a valid instagram.com session (the Instagram scraper logs
  * in first and shares the storage state via stealth.ts STATE_KEY). Visits
- * threads.net/login, clicks the "Continue as @{username}" button, and waits
- * for threads.net cookies to be set.
+ * threads.com/login, clicks "Continue with Instagram" / "Continue as
+ * @{username}", and waits for threads.com cookies to be set.
  */
 async function threadsSsoHandoff(
   context: BrowserContext,
   igUsername: string
 ): Promise<void> {
   if (await hasThreadsSession(context)) {
-    console.log("[threads] Already has threads.net session cookies");
+    console.log("[threads] Already has threads.com session cookies");
     return;
   }
 
   const page = await context.newPage();
   try {
     console.log("[threads] Performing Meta SSO handoff from Instagram...");
-    await page.goto("https://www.threads.net/login", {
+    await page.goto(`${THREADS_HOST}/login`, {
       waitUntil: "domcontentloaded",
       timeout: 20000,
     });
     await randomDelay(2000, 4000);
 
-    // Threads login page shows "Continue as @username" when a valid IG session
-    // cookie is present in this browser context. We only click that specific
-    // button — never a generic "Continue" which could be the credentials
-    // form's submit button.
+    // Threads login page shows one of:
+    //   "Continue with Instagram"  (universal SSO entry point)
+    //   "Continue as @{username}"  (when an active IG session cookie is detected)
+    // Try the username-specific selectors first, then fall back to the generic
+    // "Continue with Instagram" button. Never click bare "Continue" — that's
+    // the credential form submit.
     const ssoSelectors = [
       `div[role="button"]:has-text("Continue as ${igUsername}")`,
       `div[role="button"]:has-text("Continue as @${igUsername}")`,
@@ -75,9 +85,12 @@ async function threadsSsoHandoff(
       `a:has-text("Continue as @${igUsername}")`,
       `button:has-text("Continue as ${igUsername}")`,
       `button:has-text("Continue as @${igUsername}")`,
+      'div[role="button"]:has-text("Continue with Instagram")',
+      'a:has-text("Continue with Instagram")',
+      'button:has-text("Continue with Instagram")',
     ];
 
-    let clicked = false;
+    let clickedSelector: string | null = null;
     for (const selector of ssoSelectors) {
       const btn = await page.$(selector);
       if (btn) {
@@ -85,17 +98,17 @@ async function threadsSsoHandoff(
         await Promise.all([
           page
             .waitForURL((url) => !url.pathname.includes("/login"), {
-              timeout: 15000,
+              timeout: 20000,
             })
             .catch(() => null),
           btn.click(),
         ]);
-        clicked = true;
+        clickedSelector = selector;
         break;
       }
     }
 
-    if (!clicked) {
+    if (!clickedSelector) {
       const snippet = (
         await page.$eval("body", (el) => el.innerText.slice(0, 800))
       )
@@ -103,11 +116,11 @@ async function threadsSsoHandoff(
         .trim();
       const url = page.url();
       throw new Error(
-        `Threads SSO "Continue as ${igUsername}" button not found at ${url}. Page: ${snippet}`
+        `Threads SSO button not found at ${url}. Tried "Continue as ${igUsername}" and "Continue with Instagram". Page: ${snippet}`
       );
     }
 
-    await randomDelay(2000, 4000);
+    await randomDelay(3000, 5000);
 
     // Dismiss optional post-SSO prompts ("Save login info?", "Turn on notifications").
     for (const text of ["Not now", "Not Now", "Save info", "Save Info"]) {
@@ -128,7 +141,7 @@ async function threadsSsoHandoff(
         .trim();
       const url = page.url();
       throw new Error(
-        `Threads SSO handoff clicked but no sessionid cookie set. URL=${url} Page=${snippet}`
+        `Threads SSO clicked (${clickedSelector}) but no sessionid cookie set. URL=${url} Page=${snippet}`
       );
     }
     console.log("[threads] SSO handoff successful");
@@ -251,7 +264,7 @@ async function scrapeProfile(
   context: BrowserContext,
   username: string
 ): Promise<ScrapedItem[]> {
-  const profileUrl = `https://www.threads.net/@${username}`;
+  const profileUrl = `${THREADS_HOST}/@${username}`;
   const page = await context.newPage();
   const results: ScrapedItem[] = [];
 
@@ -332,7 +345,7 @@ async function scrapeProfile(
 
         results.push({
           externalId: item.externalId,
-          postUrl: `https://www.threads.net${item.href}`,
+          postUrl: `${THREADS_HOST}${item.href}`,
           caption: item.captionText?.substring(0, 200) || null,
           thumbnailUrl: item.thumb,
           // View/like counts on profile feed are unreliable in Threads;
@@ -391,18 +404,19 @@ export const threadsScraper: PlatformScraper = {
   platform: PLATFORM,
 
   profileUrl(username) {
-    return `https://www.threads.net/@${username}`;
+    return `${THREADS_HOST}/@${username}`;
   },
 
   parseItemUrl(url) {
-    if (!/threads\.net/.test(url)) return null;
+    // Accept both threads.com (current) and threads.net (legacy redirect).
+    if (!/threads\.(com|net)/.test(url)) return null;
     const id = extractThreadsId(url);
     if (!id) return null;
-    // Canonical form (without username) — works on Threads as a redirect.
-    const userMatch = url.match(/threads\.net\/@([^/]+)\/post\//);
+    // Canonical form using threads.com.
+    const userMatch = url.match(/threads\.(?:com|net)\/@([^/]+)\/post\//);
     const canonical = userMatch
-      ? `https://www.threads.net/@${userMatch[1]}/post/${id}`
-      : `https://www.threads.net/post/${id}`;
+      ? `${THREADS_HOST}/@${userMatch[1]}/post/${id}`
+      : `${THREADS_HOST}/post/${id}`;
     return { externalId: id, canonicalUrl: canonical };
   },
 

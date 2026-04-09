@@ -24,7 +24,7 @@ const PLATFORM_LABELS: Record<Platform, string> = {
 
 const PLATFORM_PLACEHOLDERS: Record<Platform, string> = {
   instagram: "https://instagram.com/salam_bro или @salam_bro",
-  threads: "https://threads.net/@salam_bro или @salam_bro",
+  threads: "https://threads.com/@salam_bro или @salam_bro",
   tiktok: "https://tiktok.com/@salam_bro или @salam_bro",
 };
 
@@ -44,7 +44,7 @@ function extractUsername(input: string, platform: Platform): string {
   let val = input.trim();
   const patterns: Record<Platform, RegExp> = {
     instagram: /instagram\.com\/([^/?#]+)/,
-    threads: /threads\.net\/@?([^/?#]+)/,
+    threads: /threads\.(?:com|net)\/@?([^/?#]+)/,
     tiktok: /tiktok\.com\/@?([^/?#]+)/,
   };
   const m = val.match(patterns[platform]);

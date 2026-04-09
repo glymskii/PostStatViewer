@@ -39,7 +39,7 @@ const PLATFORM_ITEM_LABEL_PLURAL: Record<Platform, string> = {
 
 const PLATFORM_ADD_PLACEHOLDER: Record<Platform, string> = {
   instagram: "https://www.instagram.com/reel/ABC123/",
-  threads: "https://www.threads.net/@username/post/ABC123",
+  threads: "https://www.threads.com/@username/post/ABC123",
   tiktok: "https://www.tiktok.com/@username/video/1234567890",
 };
 

@@ -56,7 +56,7 @@ function extractUsernameFromInput(input: string, platform: Platform): string {
   // Strip URL prefix if present.
   const urlPatterns: Record<Platform, RegExp> = {
     instagram: /instagram\.com\/([^/?#]+)/,
-    threads: /threads\.net\/@?([^/?#]+)/,
+    threads: /threads\.(?:com|net)\/@?([^/?#]+)/,
     tiktok: /tiktok\.com\/@?([^/?#]+)/,
   };
   const m = val.match(urlPatterns[platform]);
