@@ -1,4 +1,5 @@
 import type { BrowserContext, Page } from "playwright-core";
+// (helpers below take BrowserContext to inspect cookies)
 import {
   parseCompactNumber,
   randomDelay,
@@ -23,12 +24,25 @@ async function typeHumanLike(page: Page, selector: string, text: string) {
 }
 
 async function isLoggedIn(page: Page): Promise<boolean> {
+  // Cheap check first: presence of a non-empty sessionid cookie. Necessary
+  // but not sufficient — IG can keep stale cookies after server-side expiry.
+  const context = page.context();
+  const cookies = await context.cookies("https://www.instagram.com/");
+  const sessionCookie = cookies.find((c) => c.name === "sessionid");
+  if (!sessionCookie || !sessionCookie.value) return false;
+
+  // Authoritative check: navigate to a route that requires auth and see if
+  // IG redirects to /accounts/login/. /reels/ routes do gate, the homepage
+  // doesn't always — so use the saved-collections page which always 302s
+  // to /accounts/login/ for unauthenticated users.
   try {
-    await page.goto("https://www.instagram.com/", {
+    await page.goto("https://www.instagram.com/accounts/edit/", {
       waitUntil: "domcontentloaded",
       timeout: 15000,
     });
-    await randomDelay(2000, 4000);
+    await randomDelay(1500, 3000);
+    if (page.url().includes("/accounts/login/")) return false;
+    // Sanity: a login form on this page also means we got bounced.
     const loginForm = await page.$('input[name="username"]');
     return !loginForm;
   } catch {
