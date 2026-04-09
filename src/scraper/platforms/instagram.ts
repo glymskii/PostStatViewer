@@ -66,22 +66,49 @@ async function loginToInstagram(
 
     console.log("[instagram] Logging in...");
     await page.goto("https://www.instagram.com/accounts/login/", {
-      waitUntil: "domcontentloaded",
-      timeout: 15000,
+      waitUntil: "networkidle",
+      timeout: 30000,
     });
     await randomDelay(2000, 4000);
 
+    // Dismiss cookie consent — IG shows this in the EU / headless contexts.
     try {
       const cookieButton = await page.$(
-        'button:has-text("Allow all cookies"), button:has-text("Allow essential and optional cookies")'
+        [
+          'button:has-text("Allow all cookies")',
+          'button:has-text("Allow essential and optional cookies")',
+          'button:has-text("Accept all")',
+          'button:has-text("Accept All")',
+          'button:has-text("Decline optional cookies")',
+        ].join(", ")
       );
       if (cookieButton) {
+        console.log("[instagram] Dismissing cookie consent dialog");
         await cookieButton.click();
-        await randomDelay(1000, 2000);
+        await randomDelay(1500, 3000);
       }
     } catch {}
 
-    await page.waitForSelector('input[name="username"]', { timeout: 10000 });
+    // Wait for the login form — increased timeout, IG sometimes loads slowly.
+    try {
+      await page.waitForSelector('input[name="username"]', { timeout: 20000 });
+    } catch {
+      // Diagnostic: dump page state so we can see what's blocking.
+      const diag = await page
+        .evaluate(() => ({
+          url: location.href,
+          title: document.title,
+          body: (document.body?.innerText || "").slice(0, 600).replace(/\s+/g, " ").trim(),
+          inputs: Array.from(document.querySelectorAll("input")).map(
+            (i) => `name=${i.name} type=${i.type}`
+          ),
+        }))
+        .catch(() => null);
+      console.error(
+        `[instagram] Login form not found; page=${JSON.stringify(diag)}`
+      );
+      throw new Error("Login form input[name='username'] not found");
+    }
     await typeHumanLike(page, 'input[name="username"]', username);
     await randomDelay(500, 1000);
     await typeHumanLike(page, 'input[name="password"]', password);
