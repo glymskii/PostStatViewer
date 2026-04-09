@@ -113,7 +113,8 @@ async function loginToInstagram(
     await randomDelay(500, 1000);
     await typeHumanLike(page, 'input[name="pass"]', password);
     await randomDelay(500, 1500);
-    await page.click('button[type="submit"]');
+    // IG uses input[type="submit"] (not button) since ~2026
+    await page.click('[type="submit"]');
     await randomDelay(3000, 5000);
 
     const twoFactorInput = await page.$('input[name="verificationCode"]');
