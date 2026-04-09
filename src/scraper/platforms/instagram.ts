@@ -354,6 +354,38 @@ async function scrapeReelsGrid(
       }
     }
 
+    if (results.length === 0) {
+      // Diagnostic dump: nothing matched. Capture URL, link inventory, and a
+      // body snippet so we can tell if IG redirected, hit a login wall, or
+      // changed its DOM.
+      const diag = await page
+        .evaluate(() => {
+          const allLinks = Array.from(document.querySelectorAll("a"))
+            .map((a) => a.getAttribute("href") || "")
+            .filter(Boolean);
+          const sample = allLinks.slice(0, 30);
+          const reelish = allLinks.filter((h) =>
+            /\/(reel|reels|p)\//.test(h)
+          );
+          const body = (document.body?.innerText || "")
+            .slice(0, 500)
+            .replace(/\s+/g, " ")
+            .trim();
+          return {
+            url: location.href,
+            title: document.title,
+            linkCount: allLinks.length,
+            reelishCount: reelish.length,
+            sampleLinks: sample,
+            reelishSample: reelish.slice(0, 10),
+            body,
+          };
+        })
+        .catch(() => null);
+      console.log(
+        `[instagram][DIAG] zero reels found; page=${JSON.stringify(diag)}`
+      );
+    }
     console.log(`[instagram] Collected ${results.length} reels from grid`);
 
     // Visit reel pages only for missing captions.
