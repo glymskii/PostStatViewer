@@ -109,12 +109,14 @@ async function loginToInstagram(
       );
       throw new Error("Login form input[name='email'] not found");
     }
-    await typeHumanLike(page, 'input[name="email"]', username);
+    // Use fill() instead of click+type — immune to overlay visibility issues.
+    await page.fill('input[name="email"]', username);
     await randomDelay(500, 1000);
-    await typeHumanLike(page, 'input[name="pass"]', password);
+    await page.fill('input[name="pass"]', password);
     await randomDelay(500, 1500);
-    // IG uses input[type="submit"] (not button) since ~2026
-    await page.click('[type="submit"]');
+    // IG uses input[type="submit"] (not button) since ~2026.
+    // force:true bypasses visibility check — cookie consent overlay may cover it.
+    await page.click('[type="submit"]', { force: true });
     await randomDelay(3000, 5000);
 
     const twoFactorInput = await page.$('input[name="verificationCode"]');
