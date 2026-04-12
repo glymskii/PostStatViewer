@@ -364,6 +364,31 @@ async function scrapeProfile(
       }
     }
 
+    if (results.length === 0) {
+      const diag = await page
+        .evaluate(() => {
+          const allLinks = Array.from(document.querySelectorAll("a"))
+            .map((a) => a.getAttribute("href") || "")
+            .filter(Boolean);
+          const postLinks = allLinks.filter((h) => /\/post\//.test(h));
+          return {
+            url: location.href,
+            title: document.title,
+            linkCount: allLinks.length,
+            postLinkCount: postLinks.length,
+            sampleLinks: allLinks.slice(0, 30),
+            postLinkSample: postLinks.slice(0, 10),
+            body: (document.body?.innerText || "")
+              .slice(0, 600)
+              .replace(/\s+/g, " ")
+              .trim(),
+          };
+        })
+        .catch(() => null);
+      console.log(
+        `[threads][DIAG] zero posts found; page=${JSON.stringify(diag)}`
+      );
+    }
     console.log(`[threads] Collected ${results.length} posts from profile`);
 
     // Visit each post to extract views/likes/caption.
