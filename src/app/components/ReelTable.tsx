@@ -40,6 +40,62 @@ function formatDate(dateStr: string): string {
   });
 }
 
+function rankClass(rank: number): string {
+  if (rank === 1) return "bg-yellow-500 hover:bg-yellow-600";
+  if (rank === 2) return "bg-gray-400 hover:bg-gray-500";
+  if (rank === 3) return "bg-amber-700 hover:bg-amber-800";
+  return "";
+}
+
+function StatsBar({
+  views,
+  likes,
+  dark = true,
+}: {
+  views: number | null;
+  likes: number | null;
+  dark?: boolean;
+}) {
+  const bg = dark
+    ? "bg-black/70 backdrop-blur-sm"
+    : "bg-gray-100";
+  const textColor = dark ? "text-white" : "text-gray-800";
+
+  return (
+    <div className={`${bg} rounded-lg px-3 py-2 flex items-center gap-3`}>
+      <div className="flex items-center gap-1.5">
+        <svg className={`w-4 h-4 ${textColor}`} fill="currentColor" viewBox="0 0 24 24">
+          <path d="M8 5v14l11-7z" />
+        </svg>
+        <span className={`${textColor} font-bold text-sm`}>
+          {formatNumber(views)}
+        </span>
+      </div>
+      {likes !== null && (
+        <div className="flex items-center gap-1.5">
+          <svg className="w-4 h-4 text-red-400" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+          </svg>
+          <span className={`${textColor} font-bold text-sm`}>
+            {formatNumber(likes)}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PostMeta({ date, snapshots }: { date: string; snapshots: number }) {
+  return (
+    <div className="flex items-center justify-between mt-1">
+      <span className="text-xs text-muted-foreground">{formatDate(date)}</span>
+      <span className="text-xs text-muted-foreground">
+        {snapshots} замер{snapshots === 1 ? "" : snapshots < 5 ? "а" : "ов"}
+      </span>
+    </div>
+  );
+}
+
 export default function ReelTable({ posts, platform }: ReelTableProps) {
   const itemLabel = ITEM_LABEL[platform];
   const sorted = [...posts].sort(
@@ -68,98 +124,68 @@ export default function ReelTable({ posts, platform }: ReelTableProps) {
             className="block"
           >
             <Card className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer group">
-              {/* Thumbnail area */}
-              <div className="relative aspect-[9/16] max-h-[280px] bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center overflow-hidden">
-                {post.thumbnailUrl ? (
-                  <img
-                    src={post.thumbnailUrl}
-                    alt={`${itemLabel} ${post.externalId}`}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                ) : (
-                  <div className="flex flex-col items-center gap-2 text-gray-400">
-                    <svg
-                      className="w-12 h-12"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={1.5}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z"
-                      />
-                    </svg>
-                    <span className="text-xs">{itemLabel}</span>
-                  </div>
-                )}
+              {post.thumbnailUrl ? (
+                <>
+                  {/* Visual post — thumbnail-focused layout */}
+                  <div className="relative aspect-[9/16] max-h-[280px] bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center overflow-hidden">
+                    <img
+                      src={post.thumbnailUrl}
+                      alt={`${itemLabel} ${post.externalId}`}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
 
-                {/* Rank badge */}
-                <div className="absolute top-2 left-2">
-                  <Badge
-                    variant={rank <= 3 ? "default" : "secondary"}
-                    className={`text-sm font-bold ${
-                      rank === 1
-                        ? "bg-yellow-500 hover:bg-yellow-600"
-                        : rank === 2
-                        ? "bg-gray-400 hover:bg-gray-500"
-                        : rank === 3
-                        ? "bg-amber-700 hover:bg-amber-800"
-                        : ""
-                    }`}
-                  >
-                    #{rank}
-                  </Badge>
-                </div>
-
-                {/* Stats overlay */}
-                <div className="absolute bottom-2 left-2 right-2">
-                  <div className="bg-black/70 backdrop-blur-sm rounded-lg px-3 py-2 flex items-center gap-3">
-                    <div className="flex items-center gap-1.5">
-                      <svg
-                        className="w-4 h-4 text-white"
-                        fill="currentColor"
-                        viewBox="0 0 24 24"
+                    {/* Rank badge */}
+                    <div className="absolute top-2 left-2">
+                      <Badge
+                        variant={rank <= 3 ? "default" : "secondary"}
+                        className={`text-sm font-bold ${rankClass(rank)}`}
                       >
-                        <path d="M8 5v14l11-7z" />
-                      </svg>
-                      <span className="text-white font-bold text-sm">
-                        {formatNumber(post.currentViews)}
-                      </span>
+                        #{rank}
+                      </Badge>
                     </div>
-                    {post.currentLikes !== null && (
-                      <div className="flex items-center gap-1.5">
-                        <svg
-                          className="w-4 h-4 text-red-400"
-                          fill="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-                        </svg>
-                        <span className="text-white font-bold text-sm">
-                          {formatNumber(post.currentLikes)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
 
-              {/* Info area */}
-              <div className="p-3">
-                <p className="text-sm font-medium leading-snug line-clamp-2 min-h-[2.5rem]">
-                  {post.caption || post.externalId}
-                </p>
-                <div className="flex items-center justify-between mt-1">
-                  <span className="text-xs text-muted-foreground">
-                    {formatDate(post.firstSeenAt)}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {post.snapshots.length} замер{post.snapshots.length === 1 ? "" : post.snapshots.length < 5 ? "а" : "ов"}
-                  </span>
-                </div>
-              </div>
+                    {/* Stats overlay */}
+                    <div className="absolute bottom-2 left-2 right-2">
+                      <StatsBar views={post.currentViews} likes={post.currentLikes} />
+                    </div>
+                  </div>
+
+                  {/* Info area */}
+                  <div className="p-3">
+                    <p className="text-sm font-medium leading-snug line-clamp-2 min-h-[2.5rem]">
+                      {post.caption || post.externalId}
+                    </p>
+                    <PostMeta date={post.firstSeenAt} snapshots={post.snapshots.length} />
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Text post — caption-focused layout */}
+                  <div className="relative p-4 min-h-[200px] flex flex-col">
+                    {/* Rank badge */}
+                    <div className="absolute top-2 right-2">
+                      <Badge
+                        variant={rank <= 3 ? "default" : "secondary"}
+                        className={`text-sm font-bold ${rankClass(rank)}`}
+                      >
+                        #{rank}
+                      </Badge>
+                    </div>
+
+                    {/* Caption as main content */}
+                    <p className="text-base leading-relaxed line-clamp-6 flex-1 pr-10">
+                      {post.caption || post.externalId}
+                    </p>
+
+                    {/* Stats row */}
+                    <div className="mt-3">
+                      <StatsBar views={post.currentViews} likes={post.currentLikes} dark={false} />
+                    </div>
+
+                    <PostMeta date={post.firstSeenAt} snapshots={post.snapshots.length} />
+                  </div>
+                </>
+              )}
             </Card>
           </a>
         );
