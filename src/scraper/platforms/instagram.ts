@@ -115,8 +115,9 @@ async function loginToInstagram(
     await page.fill('input[name="pass"]', password);
     await randomDelay(500, 1500);
     // IG uses input[type="submit"] (not button) since ~2026.
-    // force:true bypasses visibility check — cookie consent overlay may cover it.
-    await page.click('[type="submit"]', { force: true });
+    // Cookie consent overlay makes the element "not visible" to Playwright,
+    // even with force:true. Use raw JS click to bypass entirely.
+    await page.$eval('[type="submit"]', (el) => (el as HTMLElement).click());
     await randomDelay(3000, 5000);
 
     const twoFactorInput = await page.$('input[name="verificationCode"]');
