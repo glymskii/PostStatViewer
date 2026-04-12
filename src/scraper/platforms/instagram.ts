@@ -133,6 +133,43 @@ async function loginToInstagram(
       .catch(() => null);
     console.log(`[instagram] Post-submit state: ${JSON.stringify(postSubmit)}`);
 
+    // IG may show an email/SMS code challenge OR a TOTP 2FA screen.
+    // If "Try another way" is visible, click it to switch to TOTP (if available).
+    const isCodeChallenge = page.url().includes("/auth_platform/codeentry");
+    if (isCodeChallenge && totpSecret) {
+      console.log("[instagram] Email code challenge detected, trying 'Try another way' → TOTP");
+      const tryAnother = await page.$('button:has-text("Try another way"), a:has-text("Try another way")');
+      if (tryAnother) {
+        await tryAnother.click().catch(() =>
+          page.$eval(
+            'button:has-text("Try another way"), a:has-text("Try another way")',
+            (el) => (el as HTMLElement).click()
+          )
+        );
+        await randomDelay(3000, 5000);
+        // Dump what options are shown
+        const altState = await page
+          .evaluate(() => ({
+            url: location.href,
+            body: (document.body?.innerText || "").slice(0, 600).replace(/\s+/g, " ").trim(),
+          }))
+          .catch(() => null);
+        console.log(`[instagram] Alt verification state: ${JSON.stringify(altState)}`);
+
+        // Look for authenticator app / TOTP option
+        const authAppOption = await page.$(
+          'button:has-text("authenticator"), button:has-text("Authenticator"), ' +
+          'button:has-text("authentication app"), a:has-text("authenticator"), ' +
+          'a:has-text("authentication app")'
+        );
+        if (authAppOption) {
+          console.log("[instagram] Found authenticator app option, clicking...");
+          await authAppOption.click().catch(() => {});
+          await randomDelay(2000, 4000);
+        }
+      }
+    }
+
     const twoFactorInput = await page.$('input[name="verificationCode"]');
     if (twoFactorInput && totpSecret) {
       const { generateTOTP } = await import("@/scraper/totp");
