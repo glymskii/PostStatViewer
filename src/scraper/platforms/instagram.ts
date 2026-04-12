@@ -118,7 +118,20 @@ async function loginToInstagram(
     // Cookie consent overlay makes the element "not visible" to Playwright,
     // even with force:true. Use raw JS click to bypass entirely.
     await page.$eval('[type="submit"]', (el) => (el as HTMLElement).click());
-    await randomDelay(3000, 5000);
+    await randomDelay(5000, 8000);
+
+    // Diagnostic: what does IG show after submit?
+    const postSubmit = await page
+      .evaluate(() => ({
+        url: location.href,
+        title: document.title,
+        body: (document.body?.innerText || "").slice(0, 800).replace(/\s+/g, " ").trim(),
+        inputs: Array.from(document.querySelectorAll("input")).map(
+          (i) => `name=${i.name} type=${i.type}`
+        ),
+      }))
+      .catch(() => null);
+    console.log(`[instagram] Post-submit state: ${JSON.stringify(postSubmit)}`);
 
     const twoFactorInput = await page.$('input[name="verificationCode"]');
     if (twoFactorInput && totpSecret) {
