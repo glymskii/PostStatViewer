@@ -425,7 +425,27 @@ async function scrapeProfile(
         });
         await randomDelay(1500, 3000);
 
+        // Wait for Threads SPA to render post content.
+        await page
+          .waitForSelector('div[dir="auto"], article, [data-pressable-container]', {
+            timeout: 10000,
+          })
+          .catch(() => null);
+        await randomDelay(1000, 2000);
+
         const data = await page.evaluate(postPageEvaluate);
+
+        // If still no caption, dump a snippet for debugging.
+        if (!data.caption) {
+          const bodySnippet = await page
+            .evaluate(() =>
+              (document.body?.innerText || "").slice(0, 400).replace(/\s+/g, " ").trim()
+            )
+            .catch(() => "");
+          console.log(
+            `[threads][DIAG] no caption for ${item.externalId}: body=${bodySnippet}`
+          );
+        }
 
         if (data.caption) item.caption = data.caption.substring(0, 200);
         if (data.views) item.viewCount = parseCompactNumber(data.views);
