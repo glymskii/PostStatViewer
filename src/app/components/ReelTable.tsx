@@ -124,9 +124,50 @@ export default function ReelTable({ posts, platform }: ReelTableProps) {
             className="block"
           >
             <Card className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer group">
-              {post.thumbnailUrl ? (
+              {platform === "threads" ? (
                 <>
-                  {/* Visual post — thumbnail-focused layout */}
+                  {/* Threads: text-focused layout, optional thumbnail */}
+                  <div className="relative p-4 min-h-[200px] flex flex-col">
+                    {/* Rank badge */}
+                    <div className="absolute top-2 right-2 z-10">
+                      <Badge
+                        variant={rank <= 3 ? "default" : "secondary"}
+                        className={`text-sm font-bold ${rankClass(rank)}`}
+                      >
+                        #{rank}
+                      </Badge>
+                    </div>
+
+                    {/* Caption as main content */}
+                    <p className="text-base leading-relaxed line-clamp-5 flex-1 pr-10">
+                      {post.caption || post.externalId}
+                    </p>
+
+                    {/* Optional small thumbnail */}
+                    {post.thumbnailUrl && (
+                      <div className="mt-3 rounded-lg overflow-hidden max-h-[120px]">
+                        <img
+                          src={post.thumbnailUrl}
+                          alt=""
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = "none";
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Stats row */}
+                    <div className="mt-3">
+                      <StatsBar views={post.currentViews} likes={post.currentLikes} dark={false} />
+                    </div>
+
+                    <PostMeta date={post.firstSeenAt} snapshots={post.snapshots.length} />
+                  </div>
+                </>
+              ) : post.thumbnailUrl ? (
+                <>
+                  {/* Visual post — thumbnail-focused layout (IG Reels, TikTok) */}
                   <div className="relative aspect-[9/16] max-h-[280px] bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center overflow-hidden">
                     <img
                       src={post.thumbnailUrl}
@@ -160,9 +201,8 @@ export default function ReelTable({ posts, platform }: ReelTableProps) {
                 </>
               ) : (
                 <>
-                  {/* Text post — caption-focused layout */}
+                  {/* No thumbnail fallback */}
                   <div className="relative p-4 min-h-[200px] flex flex-col">
-                    {/* Rank badge */}
                     <div className="absolute top-2 right-2">
                       <Badge
                         variant={rank <= 3 ? "default" : "secondary"}
@@ -172,12 +212,10 @@ export default function ReelTable({ posts, platform }: ReelTableProps) {
                       </Badge>
                     </div>
 
-                    {/* Caption as main content */}
                     <p className="text-base leading-relaxed line-clamp-6 flex-1 pr-10">
                       {post.caption || post.externalId}
                     </p>
 
-                    {/* Stats row */}
                     <div className="mt-3">
                       <StatsBar views={post.currentViews} likes={post.currentLikes} dark={false} />
                     </div>
