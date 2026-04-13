@@ -245,6 +245,31 @@ const postPageEvaluate = () => {
     }
   }
 
+  // --- DOM text fallback for caption (Threads SPA may not populate meta tags)
+  if (!caption) {
+    const candidates = document.querySelectorAll(
+      'article div[dir="auto"], main div[dir="auto"], [data-pressable-container] div[dir="auto"]'
+    );
+    for (const el of candidates) {
+      const t = el.textContent?.trim() || "";
+      if (t.length >= 10 && t.length < 1000 && !/^\d+[KkMm]?\s*(views?|likes?|replies?)/i.test(t)) {
+        caption = t;
+        break;
+      }
+    }
+  }
+  if (!caption) {
+    let bestText = "";
+    const blocks = document.querySelectorAll("article span, main span");
+    for (const el of blocks) {
+      const t = el.textContent?.trim() || "";
+      if (t.length > bestText.length && t.length >= 15 && t.length < 1000) {
+        bestText = t;
+      }
+    }
+    if (bestText) caption = bestText;
+  }
+
   // --- thumbnail
   const ogImage = document.querySelector('meta[property="og:image"]');
   if (ogImage) thumbnail = ogImage.getAttribute("content");
@@ -409,7 +434,7 @@ async function scrapeProfile(
           item.thumbnailUrl = data.thumbnail;
 
         console.log(
-          `[threads] ${item.externalId}: views=${item.viewCount}, likes=${item.likeCount}`
+          `[threads] ${item.externalId}: views=${item.viewCount}, likes=${item.likeCount}, caption=${item.caption ? item.caption.slice(0, 40) + "..." : "null"}`
         );
       } catch {
         console.log(`[threads] Failed to enrich ${item.externalId}`);
