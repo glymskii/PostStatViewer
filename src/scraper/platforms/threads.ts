@@ -245,29 +245,31 @@ const postPageEvaluate = () => {
     }
   }
 
-  // --- DOM text fallback for caption (Threads SPA may not populate meta tags)
+  // --- innerText fallback (Threads SPA doesn't populate meta tags reliably)
+  // body.innerText format: "Thread {N} views {username} {date} {POST TEXT} Translate ..."
   if (!caption) {
-    const candidates = document.querySelectorAll(
-      'article div[dir="auto"], main div[dir="auto"], [data-pressable-container] div[dir="auto"]'
+    const body = (document.body?.innerText || "").trim();
+    // Strip the header: "Thread\n{N} views\n{username}\n{date}\n"
+    // Then take everything before "Translate" / "View activity" / "Reply"
+    const headerEnd = body.search(
+      /\n(?:\d{2}\/\d{2}\/\d{2,4}|\d+[hm]|\d+d|\d+w|yesterday|just now)/i
     );
-    for (const el of candidates) {
-      const t = el.textContent?.trim() || "";
-      if (t.length >= 10 && t.length < 1000 && !/^\d+[KkMm]?\s*(views?|likes?|replies?)/i.test(t)) {
-        caption = t;
-        break;
+    if (headerEnd > 0) {
+      // Find the line after the date
+      const afterDate = body.indexOf("\n", headerEnd + 1);
+      if (afterDate > 0) {
+        let postText = body.slice(afterDate + 1);
+        // Cut off trailing UI elements
+        for (const cutoff of ["\nTranslate", "\nView activity", "\nReply", "\nLike", "\nShare"]) {
+          const idx = postText.indexOf(cutoff);
+          if (idx > 0) postText = postText.slice(0, idx);
+        }
+        postText = postText.trim();
+        if (postText.length >= 5) {
+          caption = postText;
+        }
       }
     }
-  }
-  if (!caption) {
-    let bestText = "";
-    const blocks = document.querySelectorAll("article span, main span");
-    for (const el of blocks) {
-      const t = el.textContent?.trim() || "";
-      if (t.length > bestText.length && t.length >= 15 && t.length < 1000) {
-        bestText = t;
-      }
-    }
-    if (bestText) caption = bestText;
   }
 
   // --- thumbnail
