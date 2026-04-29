@@ -51,6 +51,25 @@ function formatDate(dateStr: string | null): string {
   });
 }
 
+const STALE_HOURS = 36;
+
+function staleness(lastScrapeAt: string | null): {
+  stale: boolean;
+  hoursAgo: number | null;
+} {
+  if (!lastScrapeAt) return { stale: true, hoursAgo: null };
+  const ms = Date.now() - new Date(lastScrapeAt).getTime();
+  const hours = ms / (60 * 60 * 1000);
+  return { stale: hours >= STALE_HOURS, hoursAgo: hours };
+}
+
+function formatStaleness(hoursAgo: number | null): string {
+  if (hoursAgo === null) return "Сбор ещё ни разу не запускался";
+  const days = Math.floor(hoursAgo / 24);
+  if (days >= 1) return `Сбор не работает ${days} ${days === 1 ? "день" : days < 5 ? "дня" : "дней"}`;
+  return `Сбор не работает ${Math.round(hoursAgo)}ч`;
+}
+
 export default function AccountCard({
   platform,
   username,
@@ -61,9 +80,21 @@ export default function AccountCard({
   lastScrapeStatus,
   isActive,
 }: AccountCardProps) {
+  const stale = staleness(lastScrapeAt);
+
   return (
     <Link href={`/accounts/${platform}/${username}`}>
-      <Card className="hover:shadow-md transition-shadow cursor-pointer">
+      <Card
+        className={`hover:shadow-md transition-shadow cursor-pointer overflow-hidden ${
+          stale.stale && isActive ? "ring-2 ring-red-400" : ""
+        }`}
+      >
+        {stale.stale && isActive && (
+          <div className="bg-red-50 text-red-700 text-xs font-semibold px-3 py-1.5 border-b border-red-200">
+            {formatStaleness(stale.hoursAgo)} — проверь сессию в{" "}
+            <span className="underline">Настройках</span>
+          </div>
+        )}
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg">@{username}</CardTitle>

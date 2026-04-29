@@ -437,18 +437,6 @@ async function scrapeProfile(
 
         const data = await page.evaluate(postPageEvaluate);
 
-        // If still no caption, dump a snippet for debugging.
-        if (!data.caption) {
-          const bodySnippet = await page
-            .evaluate(() =>
-              (document.body?.innerText || "").slice(0, 400).replace(/\s+/g, " ").trim()
-            )
-            .catch(() => "");
-          console.log(
-            `[threads][DIAG] no caption for ${item.externalId}: body=${bodySnippet}`
-          );
-        }
-
         if (data.caption) item.caption = data.caption.substring(0, 200);
         if (data.views) item.viewCount = parseCompactNumber(data.views);
         if (data.likes) item.likeCount = parseCompactNumber(data.likes);
@@ -456,7 +444,7 @@ async function scrapeProfile(
           item.thumbnailUrl = data.thumbnail;
 
         console.log(
-          `[threads] ${item.externalId}: views=${item.viewCount}, likes=${item.likeCount}, caption=${item.caption ? item.caption.slice(0, 40) + "..." : "null"}`
+          `[threads] ${item.externalId}: views=${item.viewCount}, likes=${item.likeCount}`
         );
       } catch {
         console.log(`[threads] Failed to enrich ${item.externalId}`);
@@ -493,27 +481,42 @@ export const threadsScraper: PlatformScraper = {
   },
 
   async ensureLoggedIn(context) {
+    // Primary path: Threads has its own storage state (uploaded manually
+    // or persisted from a previous SSO handoff). If sessionid is present,
+    // we're done — no IG dependency.
+    if (await hasThreadsSession(context)) {
+      console.log("[threads] Using existing threads.com session");
+      return true;
+    }
+
+    // Fallback: try Meta SSO via Instagram. Only attempted if INSTAGRAM_USERNAME
+    // is set AND IG itself has a valid session. If either is missing, surface
+    // a NEEDS_MANUAL_SESSION error so the operator can upload Threads cookies
+    // directly via /api/sessions/upload.
     const igUsername = process.env.INSTAGRAM_USERNAME;
     if (!igUsername) {
       throw new Error(
-        "INSTAGRAM_USERNAME not configured (Threads reuses Meta SSO)"
+        "NEEDS_MANUAL_SESSION: Threads has no session and IG SSO is not configured. Upload threads.com cookies via /settings."
       );
     }
 
-    // Step 1: ensure Instagram is logged in. Uses the shared storage state
-    // (see STATE_KEY in stealth.ts) so the cookie jar carries over.
-    const igLoggedIn = await instagramScraper.ensureLoggedIn(context);
-    if (!igLoggedIn) {
+    try {
+      const igLoggedIn = await instagramScraper.ensureLoggedIn(context);
+      if (!igLoggedIn) {
+        throw new Error(
+          "NEEDS_MANUAL_SESSION: Threads SSO via Instagram failed (IG login did not return success). Upload threads.com cookies via /settings."
+        );
+      }
+      await threadsSsoHandoff(context, igUsername);
+      await saveState(context, PLATFORM);
+      return true;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.startsWith("NEEDS_MANUAL_SESSION")) throw err;
       throw new Error(
-        "Threads requires a valid Instagram session but IG login failed"
+        `NEEDS_MANUAL_SESSION: Threads SSO via Instagram failed: ${msg}. Upload threads.com cookies via /settings.`
       );
     }
-
-    // Step 2: perform the threads.net SSO handoff so threads.net cookies
-    // are set. Idempotent — skipped if already logged in.
-    await threadsSsoHandoff(context, igUsername);
-    await saveState(context, PLATFORM);
-    return true;
   },
 
   async scrapeProfile(context, username) {

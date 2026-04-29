@@ -14,19 +14,80 @@ const BROWSER_DATA_DIR =
   path.join(process.cwd(), "data", "browser-data");
 
 /**
- * Instagram and Threads both authenticate via Meta SSO, so they share the
- * same cookie jar (`instagram-state.json`). TikTok has its own state file.
- * This lets Threads inherit a valid Instagram session on Railway prod where
- * the Instagram scraper has already logged in.
+ * Each platform gets its own cookie jar. Earlier versions shared an
+ * `instagram-state.json` between IG and Threads (they both auth via Meta
+ * SSO), but that made any IG login breakage cascade to Threads. Now each
+ * session is independent — sessions can be (re)uploaded manually via
+ * /api/sessions/upload when an auto-login flow breaks.
  */
 const STATE_KEY: Record<Platform, string> = {
   instagram: "instagram",
-  threads: "instagram",
+  threads: "threads",
   tiktok: "tiktok",
 };
 
 export function statePathFor(platform: Platform): string {
   return path.join(BROWSER_DATA_DIR, `${STATE_KEY[platform]}-state.json`);
+}
+
+export function hasStorageState(platform: Platform): boolean {
+  return fs.existsSync(statePathFor(platform));
+}
+
+/**
+ * Playwright storageState format. Only `cookies` matters for our use —
+ * `origins` (localStorage / sessionStorage) is left empty.
+ */
+export interface PlaywrightStorageState {
+  cookies: Array<{
+    name: string;
+    value: string;
+    domain: string;
+    path: string;
+    expires: number;
+    httpOnly: boolean;
+    secure: boolean;
+    sameSite: "Strict" | "Lax" | "None";
+  }>;
+  origins: unknown[];
+}
+
+export function readStorageState(
+  platform: Platform
+): PlaywrightStorageState | null {
+  const p = statePathFor(platform);
+  if (!fs.existsSync(p)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(p, "utf-8")) as PlaywrightStorageState;
+  } catch {
+    return null;
+  }
+}
+
+export function writeStorageState(
+  platform: Platform,
+  state: PlaywrightStorageState
+): void {
+  const p = statePathFor(platform);
+  const dir = path.dirname(p);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(p, JSON.stringify(state, null, 2), "utf-8");
+}
+
+/**
+ * Cookies for a given platform's primary domain. Used by /api/sessions/status
+ * to determine whether a session is still valid (sessionid present + not
+ * obviously expired).
+ */
+export function platformCookieDomain(platform: Platform): string {
+  switch (platform) {
+    case "instagram":
+      return "instagram.com";
+    case "threads":
+      return "threads.com";
+    case "tiktok":
+      return "tiktok.com";
+  }
 }
 
 export function randomDelay(min: number, max: number): Promise<void> {

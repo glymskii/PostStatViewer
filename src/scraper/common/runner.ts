@@ -12,6 +12,13 @@ import type { PlatformScraper, ScrapedItem } from "./types";
 import { instagramScraper } from "@/scraper/platforms/instagram";
 import { threadsScraper } from "@/scraper/platforms/threads";
 import { tiktokScraper } from "@/scraper/platforms/tiktok";
+import {
+  cooldownUntil,
+  isStaleSessionError,
+  recordSessionFailure,
+  recordSessionSuccess,
+} from "./sessionState";
+import { notifyTelegram } from "./notify";
 
 const REGISTRY: Record<Platform, PlatformScraper> = {
   instagram: instagramScraper,
@@ -101,6 +108,16 @@ export async function runScrapeForAccount(
     return { status: "failed", postsScraped: 0, error: "Account is inactive" };
   }
 
+  // Skip if this platform is on cooldown after repeated session failures —
+  // wait for the operator to upload fresh cookies via /settings.
+  const cooldown = cooldownUntil(account.platform);
+  if (cooldown) {
+    const until = new Date(cooldown).toISOString();
+    const msg = `Platform ${account.platform} on cooldown until ${until} (upload fresh cookies via /settings to clear)`;
+    console.log(`[runner] ${msg}`);
+    return { status: "failed", postsScraped: 0, error: msg };
+  }
+
   const scraper = getScraper(account.platform);
   if (!scraper) {
     return {
@@ -166,6 +183,9 @@ export async function runScrapeForAccount(
       .where(eq(scrapeRuns.id, runResult.id))
       .run();
 
+    // Successful run clears any accumulated session-failure counters and cooldown.
+    recordSessionSuccess(account.platform);
+
     console.log(
       `[runner] ${account.platform}/@${account.username}: scraped ${savedCount} items`
     );
@@ -186,6 +206,28 @@ export async function runScrapeForAccount(
       })
       .where(eq(scrapeRuns.id, runResult.id))
       .run();
+
+    // Distinguish stale-session errors (need human to refresh cookies) from
+    // transient/network errors. Stale-session bumps the cooldown counter and
+    // fires a Telegram alert. Other errors just fire a generic alert.
+    if (isStaleSessionError(error)) {
+      recordSessionFailure(account.platform);
+      // Strip the prefix for a cleaner Telegram message.
+      const cleanMsg = errorMessage.replace(/^.*NEEDS_MANUAL_SESSION:\s*/, "");
+      void notifyTelegram({
+        severity: "session_stale",
+        platform: account.platform,
+        account: account.username,
+        message: cleanMsg,
+      });
+    } else {
+      void notifyTelegram({
+        severity: "scrape_failed",
+        platform: account.platform,
+        account: account.username,
+        message: errorMessage.slice(0, 300),
+      });
+    }
 
     return { status: "failed", postsScraped: 0, error: errorMessage };
   } finally {

@@ -120,19 +120,6 @@ async function loginToInstagram(
     await page.$eval('[type="submit"]', (el) => (el as HTMLElement).click());
     await randomDelay(5000, 8000);
 
-    // Diagnostic: what does IG show after submit?
-    const postSubmit = await page
-      .evaluate(() => ({
-        url: location.href,
-        title: document.title,
-        body: (document.body?.innerText || "").slice(0, 800).replace(/\s+/g, " ").trim(),
-        inputs: Array.from(document.querySelectorAll("input")).map(
-          (i) => `name=${i.name} type=${i.type}`
-        ),
-      }))
-      .catch(() => null);
-    console.log(`[instagram] Post-submit state: ${JSON.stringify(postSubmit)}`);
-
     // IG may show an email/SMS code challenge OR a TOTP 2FA screen.
     // If "Try another way" is visible, click it to switch to TOTP (if available).
     const isCodeChallenge = page.url().includes("/auth_platform/codeentry");
@@ -545,13 +532,48 @@ export const instagramScraper: PlatformScraper = {
   },
 
   async ensureLoggedIn(context) {
+    // Primary path: existing session cookies (manually uploaded via
+    // /api/sessions/upload OR persisted from a previous successful login).
+    const probePage = await context.newPage();
+    try {
+      if (await isLoggedIn(probePage)) {
+        console.log("[instagram] Using existing session cookies");
+        return true;
+      }
+    } finally {
+      await probePage.close();
+    }
+
+    // Fallback: attempt automated login via env credentials.
     const username = process.env.INSTAGRAM_USERNAME;
     const password = process.env.INSTAGRAM_PASSWORD;
     const totpSecret = process.env.INSTAGRAM_TOTP_SECRET;
     if (!username || !password) {
-      throw new Error("Instagram credentials not configured");
+      throw new Error(
+        "NEEDS_MANUAL_SESSION: Instagram session is missing or expired and no IG credentials are configured. Upload instagram.com cookies via /settings."
+      );
     }
-    return loginToInstagram(context, username, password, totpSecret || undefined);
+
+    try {
+      const ok = await loginToInstagram(
+        context,
+        username,
+        password,
+        totpSecret || undefined
+      );
+      if (!ok) {
+        throw new Error(
+          "NEEDS_MANUAL_SESSION: Automated Instagram login could not verify a session. The login UI likely changed — upload fresh instagram.com cookies via /settings."
+        );
+      }
+      return true;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.startsWith("NEEDS_MANUAL_SESSION")) throw err;
+      throw new Error(
+        `NEEDS_MANUAL_SESSION: Automated Instagram login crashed: ${msg}. Upload fresh instagram.com cookies via /settings.`
+      );
+    }
   },
 
   async scrapeProfile(context, username) {

@@ -80,5 +80,12 @@ export async function register() {
       `[instrumentation] Starting scheduler with: ${cronExpression}`
     );
     startScheduler(cronExpression);
+
+    // Independent hourly watchdog that alerts on stale data, regardless
+    // of whether the main scraper is healthy.
+    const { startHealthCheck } = await import(
+      "@/scraper/common/healthCheck"
+    );
+    startHealthCheck();
   }
 }

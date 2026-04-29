@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Header from "../components/Header";
+import SessionsCard from "../components/SessionsCard";
+import TelegramAlertsCard from "../components/TelegramAlertsCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -150,6 +152,12 @@ export default function SettingsPage() {
       <Header />
       <main className="container mx-auto px-4 py-8 space-y-8">
         <h1 className="text-2xl font-bold">Настройки</h1>
+
+        {/* Sessions (manual cookie upload) */}
+        <SessionsCard />
+
+        {/* Telegram alerts */}
+        <TelegramAlertsCard />
 
         {/* Interval settings */}
         <Card>
