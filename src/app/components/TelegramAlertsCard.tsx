@@ -6,9 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+interface TelegramConfigStatus {
+  tokenFromEnv: boolean;
+  chatIdFromEnv: boolean;
+  managedByEnv: boolean;
+}
+
 export default function TelegramAlertsCard() {
   const [botToken, setBotToken] = useState("");
   const [chatId, setChatId] = useState("");
+  const [config, setConfig] = useState<TelegramConfigStatus | null>(null);
   const [savingToken, setSavingToken] = useState(false);
   const [savingChat, setSavingChat] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -19,11 +26,19 @@ export default function TelegramAlertsCard() {
 
   async function load() {
     try {
-      const res = await fetch("/api/settings");
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.telegram_bot_token) setBotToken(data.telegram_bot_token);
-      if (data.telegram_chat_id) setChatId(data.telegram_chat_id);
+      const [settingsRes, configRes] = await Promise.all([
+        fetch("/api/settings"),
+        fetch("/api/notifications/config"),
+      ]);
+      if (settingsRes.ok) {
+        const data = await settingsRes.json();
+        if (data.telegram_bot_token) setBotToken(data.telegram_bot_token);
+        if (data.telegram_chat_id) setChatId(data.telegram_chat_id);
+      }
+      if (configRes.ok) {
+        const data = await configRes.json();
+        setConfig(data.telegram);
+      }
     } catch (err) {
       console.error("Failed to load Telegram settings:", err);
     }
@@ -78,7 +93,9 @@ export default function TelegramAlertsCard() {
     }
   }
 
-  const canTest = Boolean(botToken && chatId);
+  const tokenLocked = config?.tokenFromEnv ?? false;
+  const chatLocked = config?.chatIdFromEnv ?? false;
+  const canTest = config?.managedByEnv || Boolean(botToken && chatId);
 
   return (
     <Card>
@@ -110,16 +127,28 @@ export default function TelegramAlertsCard() {
           .
         </p>
 
+        {config?.managedByEnv && (
+          <div className="text-xs bg-blue-50 border border-blue-200 text-blue-800 rounded px-3 py-2">
+            Telegram credentials заданы через переменные окружения
+            (<code>TELEGRAM_BOT_TOKEN</code>, <code>TELEGRAM_CHAT_ID</code>). Поля ниже
+            заблокированы — для изменения отредактируй env в Railway.
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="bot-token">Bot token</Label>
+            <Label htmlFor="bot-token">
+              Bot token{tokenLocked && " (из env)"}
+            </Label>
             <Input
               id="bot-token"
               type="password"
-              placeholder="123456:ABC-DEF..."
+              placeholder={tokenLocked ? "Задан в TELEGRAM_BOT_TOKEN" : "123456:ABC-DEF..."}
               value={botToken}
+              disabled={tokenLocked}
               onChange={(e) => setBotToken(e.target.value)}
               onBlur={() =>
+                !tokenLocked &&
                 saveSetting("telegram_bot_token", botToken, setSavingToken)
               }
             />
@@ -128,13 +157,17 @@ export default function TelegramAlertsCard() {
             )}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="chat-id">Chat ID</Label>
+            <Label htmlFor="chat-id">
+              Chat ID{chatLocked && " (из env)"}
+            </Label>
             <Input
               id="chat-id"
-              placeholder="123456789"
+              placeholder={chatLocked ? "Задан в TELEGRAM_CHAT_ID" : "123456789"}
               value={chatId}
+              disabled={chatLocked}
               onChange={(e) => setChatId(e.target.value)}
               onBlur={() =>
+                !chatLocked &&
                 saveSetting("telegram_chat_id", chatId, setSavingChat)
               }
             />

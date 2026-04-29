@@ -49,8 +49,12 @@ export interface TelegramConfig {
 }
 
 export function getTelegramConfig(): TelegramConfig | null {
-  const botToken = getSetting("telegram_bot_token");
-  const chatId = getSetting("telegram_chat_id");
+  // Env vars take precedence over the settings table — they don't leak
+  // through screenshots of /settings and survive any DB wipe.
+  const botToken =
+    process.env.TELEGRAM_BOT_TOKEN || getSetting("telegram_bot_token");
+  const chatId =
+    process.env.TELEGRAM_CHAT_ID || getSetting("telegram_chat_id");
   if (!botToken || !chatId) return null;
   return { botToken, chatId };
 }
