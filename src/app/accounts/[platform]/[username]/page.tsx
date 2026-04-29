@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { exportAccountToExcel } from "../../../utils/exportAccountToExcel";
 
 type Platform = "instagram" | "threads" | "tiktok";
 
@@ -191,6 +192,25 @@ export default function AccountPage() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={loading || posts.length === 0 || !accountInfo}
+              onClick={() => {
+                if (!accountInfo) return;
+                exportAccountToExcel({
+                  account: {
+                    username,
+                    clientName: accountInfo.clientName,
+                    platform,
+                  },
+                  posts,
+                  periodDays: parseInt(days, 10),
+                });
+              }}
+            >
+              Экспорт в Excel
+            </Button>
             <span className="text-sm text-muted-foreground">Период:</span>
             <Select value={days} onValueChange={(v) => v && setDays(v)}>
               <SelectTrigger className="w-[140px]">
