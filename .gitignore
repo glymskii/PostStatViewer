@@ -43,3 +43,8 @@ next-env.d.ts
 # PostStatViewer
 /browser-data/
 /data/
+
+# Local IDE / Claude harness configs (machine-specific paths)
+/.claude/
+/.idea/
+/.vscode/
