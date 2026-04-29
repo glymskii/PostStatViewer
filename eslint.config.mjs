@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Plain Node scripts — they use CommonJS, not bundled by Next, and the
+    // strict TS rules (no-require-imports) don't apply.
+    "scripts/**",
   ]),
 ]);
 
