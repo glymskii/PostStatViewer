@@ -1,8 +1,16 @@
 "use client";
 
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { Platform } from "@/db/schema";
+import MiniViewChart from "./MiniViewChart";
+
+const PLATFORM_LINE_COLOR: Record<Platform, string> = {
+  instagram: "text-pink-500",
+  threads: "text-gray-700",
+  tiktok: "text-cyan-500",
+};
 
 interface PostData {
   externalId: string;
@@ -85,6 +93,77 @@ function StatsBar({
   );
 }
 
+/**
+ * Thumbnail block for image-focused (Instagram / TikTok) cards.
+ * Instagram CDN URLs include short-lived signatures and frequently return
+ * 403 after 24-48h. When that happens we hide the broken <img> and show a
+ * platform-styled placeholder instead, so the card never looks "broken".
+ */
+function ThumbnailMedia({
+  src,
+  alt,
+  rank,
+  views,
+  likes,
+  fallbackLabel,
+}: {
+  src: string;
+  alt: string;
+  rank: number;
+  views: number | null;
+  likes: number | null;
+  fallbackLabel: string;
+}) {
+  const [errored, setErrored] = useState(false);
+
+  return (
+    <div className="relative aspect-[9/16] max-h-[280px] bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center overflow-hidden">
+      {!errored ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={src}
+          alt={alt}
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          onError={() => setErrored(true)}
+        />
+      ) : (
+        <div className="flex flex-col items-center gap-2 text-gray-400 px-4 text-center">
+          <svg
+            className="w-12 h-12"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={1.5}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z"
+            />
+          </svg>
+          <span className="text-xs">{fallbackLabel}</span>
+          <span className="text-[10px] text-gray-300">обложка недоступна</span>
+        </div>
+      )}
+
+      {/* Rank badge */}
+      <div className="absolute top-2 left-2">
+        <Badge
+          variant={rank <= 3 ? "default" : "secondary"}
+          className={`text-sm font-bold ${rankClass(rank)}`}
+        >
+          #{rank}
+        </Badge>
+      </div>
+
+      {/* Stats overlay */}
+      <div className="absolute bottom-2 left-2 right-2">
+        <StatsBar views={views} likes={likes} />
+      </div>
+    </div>
+  );
+}
+
 function PostMeta({ date, snapshots }: { date: string; snapshots: number }) {
   return (
     <div className="flex items-center justify-between mt-1">
@@ -162,34 +241,28 @@ export default function ReelTable({ posts, platform }: ReelTableProps) {
                       <StatsBar views={post.currentViews} likes={post.currentLikes} dark={false} />
                     </div>
 
+                    {/* Views trend sparkline */}
+                    <div className="mt-3">
+                      <MiniViewChart
+                        snapshots={post.snapshots}
+                        colorClass={PLATFORM_LINE_COLOR[platform]}
+                      />
+                    </div>
+
                     <PostMeta date={post.firstSeenAt} snapshots={post.snapshots.length} />
                   </div>
                 </>
               ) : post.thumbnailUrl ? (
                 <>
                   {/* Visual post — thumbnail-focused layout (IG Reels, TikTok) */}
-                  <div className="relative aspect-[9/16] max-h-[280px] bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center overflow-hidden">
-                    <img
-                      src={post.thumbnailUrl}
-                      alt={`${itemLabel} ${post.externalId}`}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-
-                    {/* Rank badge */}
-                    <div className="absolute top-2 left-2">
-                      <Badge
-                        variant={rank <= 3 ? "default" : "secondary"}
-                        className={`text-sm font-bold ${rankClass(rank)}`}
-                      >
-                        #{rank}
-                      </Badge>
-                    </div>
-
-                    {/* Stats overlay */}
-                    <div className="absolute bottom-2 left-2 right-2">
-                      <StatsBar views={post.currentViews} likes={post.currentLikes} />
-                    </div>
-                  </div>
+                  <ThumbnailMedia
+                    src={post.thumbnailUrl}
+                    alt={`${itemLabel} ${post.externalId}`}
+                    rank={rank}
+                    views={post.currentViews}
+                    likes={post.currentLikes}
+                    fallbackLabel={itemLabel}
+                  />
 
                   {/* Info area */}
                   <div className="p-3">
@@ -197,6 +270,13 @@ export default function ReelTable({ posts, platform }: ReelTableProps) {
                       {post.caption || post.externalId}
                     </p>
                     <PostMeta date={post.firstSeenAt} snapshots={post.snapshots.length} />
+                    {/* Views trend sparkline */}
+                    <div className="mt-2 pt-2 border-t border-gray-100">
+                      <MiniViewChart
+                        snapshots={post.snapshots}
+                        colorClass={PLATFORM_LINE_COLOR[platform]}
+                      />
+                    </div>
                   </div>
                 </>
               ) : (
@@ -218,6 +298,14 @@ export default function ReelTable({ posts, platform }: ReelTableProps) {
 
                     <div className="mt-3">
                       <StatsBar views={post.currentViews} likes={post.currentLikes} dark={false} />
+                    </div>
+
+                    {/* Views trend sparkline */}
+                    <div className="mt-3">
+                      <MiniViewChart
+                        snapshots={post.snapshots}
+                        colorClass={PLATFORM_LINE_COLOR[platform]}
+                      />
                     </div>
 
                     <PostMeta date={post.firstSeenAt} snapshots={post.snapshots.length} />
