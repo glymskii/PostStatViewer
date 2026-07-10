@@ -16,6 +16,7 @@ export default function Header() {
 
   const navItems = [
     { href: "/", label: "Главная" },
+    { href: "/report", label: "Отчёт" },
     { href: "/settings", label: "Настройки" },
   ];
 
