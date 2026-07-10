@@ -5,6 +5,8 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { Platform } from "@/db/schema";
 import MiniViewChart from "./MiniViewChart";
+import DictionarySelect from "./DictionarySelect";
+import { DICT_TEAMS_KEY } from "@/lib/dictionaries";
 
 const PLATFORM_LINE_COLOR: Record<Platform, string> = {
   instagram: "text-pink-500",
@@ -13,10 +15,12 @@ const PLATFORM_LINE_COLOR: Record<Platform, string> = {
 };
 
 interface PostData {
+  id: number;
   externalId: string;
   postUrl: string;
   caption: string | null;
   thumbnailUrl: string | null;
+  team: string | null;
   currentViews: number | null;
   currentLikes: number | null;
   firstSeenAt: string;
@@ -26,6 +30,48 @@ interface PostData {
 interface ReelTableProps {
   posts: PostData[];
   platform: Platform;
+  onTeamChange?: (postId: number, team: string | null) => void;
+}
+
+/**
+ * Team select embedded in a post card. Cards are wrapped in an <a> that
+ * opens the post in a new tab, so every interaction here must cancel the
+ * bubbled click to prevent navigation. The dropdown popup is portaled
+ * (outside the <a> in the DOM, so no native navigation), but its React
+ * synthetic events still bubble through this wrapper — hence the guard
+ * covers both trigger and popup clicks.
+ */
+function TeamRow({
+  postId,
+  team,
+  onTeamChange,
+}: {
+  postId: number;
+  team: string | null;
+  onTeamChange?: (postId: number, team: string | null) => void;
+}) {
+  if (!onTeamChange) return null;
+  return (
+    <div
+      className="mt-2 flex items-center gap-1.5"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+    >
+      <span className="text-[10px] uppercase tracking-wide text-muted-foreground shrink-0">
+        Команда
+      </span>
+      <DictionarySelect
+        dictKey={DICT_TEAMS_KEY}
+        value={team}
+        onChange={(t) => onTeamChange(postId, t)}
+        size="sm"
+        placeholder="—"
+        className="w-full"
+      />
+    </div>
+  );
 }
 
 const ITEM_LABEL: Record<Platform, string> = {
@@ -175,7 +221,11 @@ function PostMeta({ date, snapshots }: { date: string; snapshots: number }) {
   );
 }
 
-export default function ReelTable({ posts, platform }: ReelTableProps) {
+export default function ReelTable({
+  posts,
+  platform,
+  onTeamChange,
+}: ReelTableProps) {
   const itemLabel = ITEM_LABEL[platform];
   const sorted = [...posts].sort(
     (a, b) => (b.currentViews ?? 0) - (a.currentViews ?? 0)
@@ -249,6 +299,12 @@ export default function ReelTable({ posts, platform }: ReelTableProps) {
                       />
                     </div>
 
+                    <TeamRow
+                      postId={post.id}
+                      team={post.team}
+                      onTeamChange={onTeamChange}
+                    />
+
                     <PostMeta date={post.firstSeenAt} snapshots={post.snapshots.length} />
                   </div>
                 </>
@@ -277,6 +333,11 @@ export default function ReelTable({ posts, platform }: ReelTableProps) {
                         colorClass={PLATFORM_LINE_COLOR[platform]}
                       />
                     </div>
+                    <TeamRow
+                      postId={post.id}
+                      team={post.team}
+                      onTeamChange={onTeamChange}
+                    />
                   </div>
                 </>
               ) : (
@@ -307,6 +368,12 @@ export default function ReelTable({ posts, platform }: ReelTableProps) {
                         colorClass={PLATFORM_LINE_COLOR[platform]}
                       />
                     </div>
+
+                    <TeamRow
+                      postId={post.id}
+                      team={post.team}
+                      onTeamChange={onTeamChange}
+                    />
 
                     <PostMeta date={post.firstSeenAt} snapshots={post.snapshots.length} />
                   </div>

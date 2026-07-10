@@ -56,6 +56,7 @@ interface PostData {
   postUrl: string;
   caption: string | null;
   thumbnailUrl: string | null;
+  team: string | null;
   firstSeenAt: string;
   currentViews: number | null;
   currentLikes: number | null;
@@ -71,6 +72,7 @@ export default function AccountPage() {
   const [loading, setLoading] = useState(true);
   const [accountInfo, setAccountInfo] = useState<{
     clientName: string;
+    brand: string | null;
     id: number;
     platform: Platform;
   } | null>(null);
@@ -94,6 +96,7 @@ export default function AccountPage() {
         if (account) {
           setAccountInfo({
             clientName: account.clientName,
+            brand: account.brand ?? null,
             id: account.id,
             platform: account.platform,
           });
@@ -129,6 +132,18 @@ export default function AccountPage() {
   const topPosts = [...posts]
     .sort((a, b) => (b.currentViews ?? 0) - (a.currentViews ?? 0))
     .slice(0, 10);
+
+  async function handleTeamChange(postId: number, team: string | null) {
+    // Optimistic update; the 10s poll reconciles afterwards.
+    setPosts((prev) =>
+      prev.map((p) => (p.id === postId ? { ...p, team } : p))
+    );
+    await fetch("/api/posts", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ postId, team }),
+    });
+  }
 
   async function handleAddPost(e: React.FormEvent) {
     e.preventDefault();
@@ -186,6 +201,9 @@ export default function AccountPage() {
               <Badge className={PLATFORM_BADGE_CLASS[platform]}>
                 {PLATFORM_LABELS[platform]}
               </Badge>
+              {accountInfo?.brand && (
+                <Badge variant="outline">{accountInfo.brand}</Badge>
+              )}
             </div>
             {accountInfo && (
               <p className="text-muted-foreground">{accountInfo.clientName}</p>
@@ -351,7 +369,11 @@ export default function AccountPage() {
                     </div>
                   </form>
                 )}
-                <ReelTable posts={posts} platform={platform} />
+                <ReelTable
+                  posts={posts}
+                  platform={platform}
+                  onTeamChange={handleTeamChange}
+                />
               </CardContent>
             </Card>
           </>

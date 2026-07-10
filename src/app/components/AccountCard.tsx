@@ -26,6 +26,7 @@ interface AccountCardProps {
   platform: Platform;
   username: string;
   clientName: string;
+  brand?: string | null;
   postCount: number;
   avgViews: number;
   lastScrapeAt: string | null;
@@ -74,6 +75,7 @@ export default function AccountCard({
   platform,
   username,
   clientName,
+  brand,
   postCount,
   avgViews,
   lastScrapeAt,
@@ -107,7 +109,14 @@ export default function AccountCard({
               </Badge>
             </div>
           </div>
-          <p className="text-sm text-muted-foreground">{clientName}</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm text-muted-foreground">{clientName}</p>
+            {brand && (
+              <Badge variant="outline" className="text-xs font-normal">
+                {brand}
+              </Badge>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-3 gap-4 text-center">

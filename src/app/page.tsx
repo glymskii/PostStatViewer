@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Header from "./components/Header";
 import AccountCard from "./components/AccountCard";
+import DictionarySelect from "./components/DictionarySelect";
+import { DICT_BRANDS_KEY } from "@/lib/dictionaries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,6 +35,7 @@ interface Account {
   platform: Platform;
   username: string;
   clientName: string;
+  brand: string | null;
   isActive: boolean;
   postCount: number;
   avgViews: number;
@@ -60,6 +63,7 @@ export default function HomePage() {
   const [newPlatform, setNewPlatform] = useState<Platform>("instagram");
   const [newUsername, setNewUsername] = useState("");
   const [newClientName, setNewClientName] = useState("");
+  const [newBrand, setNewBrand] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState("");
   const [addSuccess, setAddSuccess] = useState("");
@@ -130,6 +134,7 @@ export default function HomePage() {
           platform: newPlatform,
           username: newUsername.trim(),
           clientName: newClientName.trim(),
+          brand: newBrand,
         }),
       });
       if (res.ok) {
@@ -139,6 +144,7 @@ export default function HomePage() {
         );
         setNewUsername("");
         setNewClientName("");
+        setNewBrand(null);
         fetchData();
         setTimeout(() => {
           setAddSuccess("");
@@ -196,7 +202,7 @@ export default function HomePage() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleAddAccount} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-sm font-medium">Платформа</label>
                     <Select
@@ -251,6 +257,19 @@ export default function HomePage() {
                       required
                     />
                   </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">Бренд</label>
+                    <DictionarySelect
+                      dictKey={DICT_BRANDS_KEY}
+                      value={newBrand}
+                      onChange={setNewBrand}
+                      className="w-full"
+                      placeholder="Выбрать бренд…"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Все посты аккаунта наследуют бренд
+                    </p>
+                  </div>
                 </div>
 
                 {addError && (
@@ -297,6 +316,7 @@ export default function HomePage() {
                 platform={account.platform}
                 username={account.username}
                 clientName={account.clientName}
+                brand={account.brand}
                 postCount={account.postCount}
                 avgViews={account.avgViews}
                 lastScrapeAt={account.lastScrapeAt}

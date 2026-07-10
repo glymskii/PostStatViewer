@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Header from "../components/Header";
 import SessionsCard from "../components/SessionsCard";
 import TelegramAlertsCard from "../components/TelegramAlertsCard";
+import DictionarySelect from "../components/DictionarySelect";
+import { DICT_BRANDS_KEY } from "@/lib/dictionaries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +31,7 @@ interface Account {
   id: number;
   username: string;
   clientName: string;
+  brand: string | null;
   isActive: boolean;
 }
 
@@ -136,6 +139,19 @@ export default function SettingsPage() {
     fetchData();
   }
 
+  async function handleBrandChange(id: number, brand: string | null) {
+    // Optimistic update — the DictionarySelect already reflects the choice.
+    setAccounts((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, brand } : a))
+    );
+    await fetch("/api/accounts", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, brand }),
+    });
+    fetchData();
+  }
+
   function formatDate(dateStr: string | null): string {
     if (!dateStr) return "-";
     return new Date(dateStr).toLocaleString("ru-RU", {
@@ -238,6 +254,7 @@ export default function SettingsPage() {
                 <TableRow>
                   <TableHead>Username</TableHead>
                   <TableHead>Клиент</TableHead>
+                  <TableHead>Бренд</TableHead>
                   <TableHead>Статус</TableHead>
                   <TableHead className="text-right">Действия</TableHead>
                 </TableRow>
@@ -249,6 +266,17 @@ export default function SettingsPage() {
                       @{account.username}
                     </TableCell>
                     <TableCell>{account.clientName}</TableCell>
+                    <TableCell>
+                      <DictionarySelect
+                        dictKey={DICT_BRANDS_KEY}
+                        value={account.brand}
+                        onChange={(brand) =>
+                          handleBrandChange(account.id, brand)
+                        }
+                        size="sm"
+                        placeholder="—"
+                      />
+                    </TableCell>
                     <TableCell>
                       <Badge
                         variant={account.isActive ? "default" : "secondary"}
