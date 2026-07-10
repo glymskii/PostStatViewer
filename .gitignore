@@ -44,6 +44,9 @@ next-env.d.ts
 /browser-data/
 /data/
 
+# Exported session cookies (live credentials — never commit)
+*-cookies.json
+
 # Local IDE / Claude harness configs (machine-specific paths)
 /.claude/
 /.idea/
