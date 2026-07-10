@@ -16,6 +16,9 @@ export const accounts = sqliteTable(
     platform: text("platform", { enum: PLATFORMS }).notNull(),
     username: text("username").notNull(),
     clientName: text("client_name").notNull(),
+    // Brand attribution («Salam bro», «Just doner», …). Nullable — legacy
+    // accounts are backfilled manually via the settings UI.
+    brand: text("brand"),
     profileUrl: text("profile_url").notNull(),
     isActive: integer("is_active", { mode: "boolean" })
       .notNull()
@@ -42,6 +45,9 @@ export const posts = sqliteTable(
     postUrl: text("post_url").notNull(),
     caption: text("caption"),
     thumbnailUrl: text("thumbnail_url"),
+    // Team attribution («Сценаристы», «Жади», …) — who produced this post.
+    // Nullable; set manually per post from the account page.
+    team: text("team"),
     firstSeenAt: text("first_seen_at")
       .notNull()
       .default(sql`(datetime('now'))`),
