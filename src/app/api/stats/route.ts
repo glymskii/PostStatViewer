@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
       postUrl: post.postUrl,
       caption: post.caption,
       thumbnailUrl: post.thumbnailUrl,
+      team: post.team,
       firstSeenAt: post.firstSeenAt,
       currentViews: latestSnapshot?.viewCount ?? null,
       currentLikes: latestSnapshot?.likeCount ?? null,

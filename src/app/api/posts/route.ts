@@ -81,3 +81,32 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json(created, { status: 201 });
 }
+
+/**
+ * PATCH /api/posts — set team attribution for a post.
+ * Body: { postId: number, team: string | null }
+ */
+export async function PATCH(request: NextRequest) {
+  const body = await request.json().catch(() => ({}));
+  const postId: number | undefined = body.postId;
+  if (!postId || !("team" in body)) {
+    return NextResponse.json(
+      { error: "postId и team обязательны" },
+      { status: 400 }
+    );
+  }
+
+  const team: string | null =
+    typeof body.team === "string" && body.team.trim() ? body.team.trim() : null;
+
+  const updated = db
+    .update(posts)
+    .set({ team })
+    .where(eq(posts.id, postId))
+    .returning()
+    .get();
+  if (!updated) {
+    return NextResponse.json({ error: "Пост не найден" }, { status: 404 });
+  }
+  return NextResponse.json(updated);
+}

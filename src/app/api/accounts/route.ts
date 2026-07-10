@@ -71,6 +71,10 @@ export async function POST(request: NextRequest) {
   const clientName: string | undefined = body.clientName;
   const platformInput: string | undefined = body.platform;
   const usernameInput: string | undefined = body.username;
+  const brand: string | null =
+    typeof body.brand === "string" && body.brand.trim()
+      ? body.brand.trim()
+      : null;
 
   if (!usernameInput || !clientName || !platformInput) {
     return NextResponse.json(
@@ -99,7 +103,7 @@ export async function POST(request: NextRequest) {
   try {
     const account = db
       .insert(accounts)
-      .values({ platform, username, clientName, profileUrl })
+      .values({ platform, username, clientName, brand, profileUrl })
       .returning()
       .get();
 
@@ -114,6 +118,47 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+/**
+ * PATCH /api/accounts — edit account attribution.
+ * Body: { id: number, brand?: string | null, clientName?: string }
+ * Presence-checked ("brand" in body) so an explicit null clears the field.
+ */
+export async function PATCH(request: NextRequest) {
+  const body = await request.json();
+  const id: number | undefined = body.id;
+  if (!id) {
+    return NextResponse.json({ error: "id обязателен" }, { status: 400 });
+  }
+
+  const updates: { brand?: string | null; clientName?: string } = {};
+  if ("brand" in body) {
+    updates.brand =
+      typeof body.brand === "string" && body.brand.trim()
+        ? body.brand.trim()
+        : null;
+  }
+  if ("clientName" in body && typeof body.clientName === "string" && body.clientName.trim()) {
+    updates.clientName = body.clientName.trim();
+  }
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json(
+      { error: "Нет полей для обновления (brand, clientName)" },
+      { status: 400 }
+    );
+  }
+
+  const updated = db
+    .update(accounts)
+    .set(updates)
+    .where(eq(accounts.id, id))
+    .returning()
+    .get();
+  if (!updated) {
+    return NextResponse.json({ error: "Аккаунт не найден" }, { status: 404 });
+  }
+  return NextResponse.json(updated);
 }
 
 export async function DELETE(request: NextRequest) {
