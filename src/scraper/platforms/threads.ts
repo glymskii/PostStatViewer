@@ -155,6 +155,7 @@ const postPageEvaluate = () => {
   let caption: string | null = null;
   let views: string | null = null;
   let likes: string | null = null;
+  let comments: string | null = null;
   let thumbnail: string | null = null;
 
   // --- og:description: format like "username on Threads: \"Caption text\"" or "X likes - username on Threads"
@@ -165,6 +166,9 @@ const postPageEvaluate = () => {
     if (captionMatch) caption = captionMatch[1];
     const likeMatch = ogContent.match(/([\d,. ]+)\s*likes?/i);
     if (likeMatch) likes = likeMatch[1].replace(/\s/g, "");
+    // Threads "comments" are replies.
+    const replyMatch = ogContent.match(/([\d,. ]+)\s*repl(?:y|ies)/i);
+    if (replyMatch) comments = replyMatch[1].replace(/\s/g, "");
   }
 
   // --- meta description fallback
@@ -206,6 +210,11 @@ const postPageEvaluate = () => {
               views = String(count);
             } else if (typeof type === "string" && type.includes("Like")) {
               likes = String(count);
+            } else if (
+              typeof type === "string" &&
+              (type.includes("Comment") || type.includes("Reply"))
+            ) {
+              comments = String(count);
             }
           }
         }
@@ -225,11 +234,17 @@ const postPageEvaluate = () => {
       const m = text.match(/^([\d,.]+[KkMmBb]?)\s*(likes?|лайк\w*)/i);
       if (m) likes = m[1];
     }
-    if (views && likes) break;
+    if (!comments) {
+      const m = text.match(
+        /^([\d,.]+[KkMmBb]?)\s*(repl(?:y|ies)|comments?|ответ\w*)/i
+      );
+      if (m) comments = m[1];
+    }
+    if (views && likes && comments) break;
   }
 
   // --- aria-label scan
-  if (!views || !likes) {
+  if (!views || !likes || !comments) {
     const labeled = document.querySelectorAll("[aria-label]");
     for (const el of labeled) {
       const label = el.getAttribute("aria-label") || "";
@@ -241,7 +256,13 @@ const postPageEvaluate = () => {
         const m = label.match(/([\d,.]+[KkMmBb]?)\s*(likes?|лайк\w*)/i);
         if (m) likes = m[1];
       }
-      if (views && likes) break;
+      if (!comments) {
+        const m = label.match(
+          /([\d,.]+[KkMmBb]?)\s*(repl(?:y|ies)|comments?|ответ\w*)/i
+        );
+        if (m) comments = m[1];
+      }
+      if (views && likes && comments) break;
     }
   }
 
@@ -284,7 +305,7 @@ const postPageEvaluate = () => {
     if (img) thumbnail = img.getAttribute("src");
   }
 
-  return { caption, views, likes, thumbnail };
+  return { caption, views, likes, comments, thumbnail };
 };
 
 async function scrapeProfile(
@@ -375,10 +396,11 @@ async function scrapeProfile(
           postUrl: `${THREADS_HOST}${item.href}`,
           caption: item.captionText?.substring(0, 200) || null,
           thumbnailUrl: item.thumb,
-          // View/like counts on profile feed are unreliable in Threads;
+          // View/like/reply counts on profile feed are unreliable in Threads;
           // we always re-visit the post page to get accurate metrics.
           viewCount: null,
           likeCount: null,
+          commentCount: null,
         });
       }
 
@@ -440,11 +462,12 @@ async function scrapeProfile(
         if (data.caption) item.caption = data.caption.substring(0, 200);
         if (data.views) item.viewCount = parseCompactNumber(data.views);
         if (data.likes) item.likeCount = parseCompactNumber(data.likes);
+        if (data.comments) item.commentCount = parseCompactNumber(data.comments);
         if (data.thumbnail && !item.thumbnailUrl)
           item.thumbnailUrl = data.thumbnail;
 
         console.log(
-          `[threads] ${item.externalId}: views=${item.viewCount}, likes=${item.likeCount}`
+          `[threads] ${item.externalId}: views=${item.viewCount}, likes=${item.likeCount}, comments=${item.commentCount}`
         );
       } catch {
         console.log(`[threads] Failed to enrich ${item.externalId}`);
@@ -543,9 +566,10 @@ export const threadsScraper: PlatformScraper = {
         thumbnailUrl: data.thumbnail,
         viewCount: data.views ? parseCompactNumber(data.views) : null,
         likeCount: data.likes ? parseCompactNumber(data.likes) : null,
+        commentCount: data.comments ? parseCompactNumber(data.comments) : null,
       };
       console.log(
-        `[threads] Single post ${id}: views=${result.viewCount}, likes=${result.likeCount}`
+        `[threads] Single post ${id}: views=${result.viewCount}, likes=${result.likeCount}, comments=${result.commentCount}`
       );
       return result;
     } finally {

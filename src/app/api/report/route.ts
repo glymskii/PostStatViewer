@@ -18,6 +18,7 @@ interface ReportPost {
   firstSeenAt: string;
   views: number | null;
   likes: number | null;
+  comments: number | null;
 }
 
 interface ReportGroup {
@@ -27,6 +28,8 @@ interface ReportGroup {
   totalViews: number;
   avgViews: number;
   totalLikes: number;
+  /** null when no post in the group has comment data yet (pre-0004 snapshots). */
+  totalComments: number | null;
   posts: ReportPost[];
 }
 
@@ -106,6 +109,7 @@ export async function GET(request: NextRequest) {
       ...row,
       views: latest?.viewCount ?? null,
       likes: latest?.likeCount ?? null,
+      comments: latest?.commentCount ?? null,
     };
   });
 
@@ -123,6 +127,7 @@ export async function GET(request: NextRequest) {
         totalViews: 0,
         avgViews: 0,
         totalLikes: 0,
+        totalComments: null,
         posts: [],
       };
       groupMap.set(key, group);
@@ -130,6 +135,9 @@ export async function GET(request: NextRequest) {
     group.postsCount++;
     group.totalViews += post.views ?? 0;
     group.totalLikes += post.likes ?? 0;
+    if (post.comments !== null) {
+      group.totalComments = (group.totalComments ?? 0) + post.comments;
+    }
     group.posts.push(post);
   }
 
@@ -141,10 +149,15 @@ export async function GET(request: NextRequest) {
   }
   groups.sort((a, b) => b.totalViews - a.totalViews);
 
+  const commentGroups = groups.filter((g) => g.totalComments !== null);
   const totals = {
     postsCount: reportPosts.length,
     totalViews: groups.reduce((sum, g) => sum + g.totalViews, 0),
     totalLikes: groups.reduce((sum, g) => sum + g.totalLikes, 0),
+    totalComments:
+      commentGroups.length > 0
+        ? commentGroups.reduce((sum, g) => sum + (g.totalComments ?? 0), 0)
+        : null,
     avgViews: 0,
   };
   totals.avgViews =

@@ -67,6 +67,9 @@ export const postSnapshots = sqliteTable("post_snapshots", {
     .references(() => posts.id),
   viewCount: integer("view_count"),
   likeCount: integer("like_count"),
+  // Comment count (Threads: replies). Nullable — extraction is best-effort
+  // and older snapshots predate the column.
+  commentCount: integer("comment_count"),
   scrapedAt: text("scraped_at")
     .notNull()
     .default(sql`(datetime('now'))`),

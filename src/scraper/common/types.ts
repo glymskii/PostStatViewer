@@ -12,6 +12,8 @@ export interface ScrapedItem {
   thumbnailUrl: string | null;
   viewCount: number | null;
   likeCount: number | null;
+  /** Comment count (Threads: replies). Best-effort — null when the page doesn't expose it. */
+  commentCount: number | null;
 }
 
 /**

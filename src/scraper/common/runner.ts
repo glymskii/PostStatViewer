@@ -84,6 +84,7 @@ function persistItems(accountId: number, items: ScrapedItem[]): number {
         postId: post.id,
         viewCount: item.viewCount,
         likeCount: item.likeCount,
+        commentCount: item.commentCount,
       })
       .run();
 

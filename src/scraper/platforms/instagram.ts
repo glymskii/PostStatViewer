@@ -215,6 +215,7 @@ const reelPageEvaluate = () => {
   let caption: string | null = null;
   let views: string | null = null;
   let likes: string | null = null;
+  let comments: string | null = null;
   let thumbnail: string | null = null;
 
   const ogDesc = document.querySelector('meta[property="og:description"]');
@@ -233,6 +234,9 @@ const reelPageEvaluate = () => {
     }
     const ogLikeMatch = ogContent.match(/([\d,. ]+)\s*likes?/i);
     if (ogLikeMatch) likes = ogLikeMatch[1].replace(/\s/g, "");
+    // og:description format: "123 likes, 45 comments - user on date: ..."
+    const ogCommentMatch = ogContent.match(/([\d,. ]+)\s*comments?/i);
+    if (ogCommentMatch) comments = ogCommentMatch[1].replace(/\s/g, "");
   }
 
   if (!caption) {
@@ -308,6 +312,31 @@ const reelPageEvaluate = () => {
       }
     }
   }
+  if (!comments) {
+    for (const el of allSpans) {
+      const text = el.textContent?.trim() || "";
+      const commentMatch = text.match(
+        /^([\d,.]+[KkMmBb]?)\s*(comments?|коммент\w*)/i
+      );
+      if (commentMatch) {
+        comments = commentMatch[1];
+        break;
+      }
+    }
+  }
+  if (!comments) {
+    const labeled = document.querySelectorAll("[aria-label]");
+    for (const el of labeled) {
+      const label = el.getAttribute("aria-label") || "";
+      const commentMatch = label.match(
+        /([\d,.]+[KkMmBb]?)\s*(comments?|коммент\w*)/i
+      );
+      if (commentMatch) {
+        comments = commentMatch[1];
+        break;
+      }
+    }
+  }
 
   const video = document.querySelector("video");
   if (video?.poster) thumbnail = video.poster;
@@ -316,7 +345,7 @@ const reelPageEvaluate = () => {
     if (ogImage) thumbnail = ogImage.getAttribute("content");
   }
 
-  return { caption, views, likes, thumbnail };
+  return { caption, views, likes, comments, thumbnail };
 };
 
 async function scrapeReelsGrid(
@@ -424,6 +453,8 @@ async function scrapeReelsGrid(
           caption: null,
           viewCount: parseCompactNumber(item.viewText),
           likeCount: parseCompactNumber(item.likeText),
+          // Grid tiles don't expose comments; enriched on the reel page below.
+          commentCount: null,
         });
       }
 
@@ -496,6 +527,9 @@ async function scrapeReelsGrid(
         }
         if (pageData.likes && reel.likeCount === null) {
           reel.likeCount = parseCompactNumber(pageData.likes);
+        }
+        if (pageData.comments) {
+          reel.commentCount = parseCompactNumber(pageData.comments);
         }
         if (pageData.thumbnail && !reel.thumbnailUrl) {
           reel.thumbnailUrl = pageData.thumbnail;
@@ -600,10 +634,13 @@ export const instagramScraper: PlatformScraper = {
         caption: pageData.caption?.substring(0, 200) || null,
         viewCount: pageData.views ? parseCompactNumber(pageData.views) : null,
         likeCount: pageData.likes ? parseCompactNumber(pageData.likes) : null,
+        commentCount: pageData.comments
+          ? parseCompactNumber(pageData.comments)
+          : null,
       };
 
       console.log(
-        `[instagram] Single reel ${id}: views=${result.viewCount}, likes=${result.likeCount}`
+        `[instagram] Single reel ${id}: views=${result.viewCount}, likes=${result.likeCount}, comments=${result.commentCount}`
       );
       return result;
     } finally {

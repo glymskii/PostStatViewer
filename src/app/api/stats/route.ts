@@ -53,9 +53,11 @@ export async function GET(request: NextRequest) {
       firstSeenAt: post.firstSeenAt,
       currentViews: latestSnapshot?.viewCount ?? null,
       currentLikes: latestSnapshot?.likeCount ?? null,
+      currentComments: latestSnapshot?.commentCount ?? null,
       snapshots: snapshots.map((s) => ({
         viewCount: s.viewCount,
         likeCount: s.likeCount,
+        commentCount: s.commentCount,
         scrapedAt: s.scrapedAt,
       })),
     };
