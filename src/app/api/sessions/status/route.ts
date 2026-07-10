@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import fs from "fs";
 import { db } from "@/db/client";
 import { accounts, scrapeRuns, PLATFORMS, type Platform } from "@/db/schema";
 import { and, desc, eq } from "drizzle-orm";
@@ -6,6 +7,7 @@ import {
   hasStorageState,
   readStorageState,
   platformCookieDomain,
+  statePathFor,
 } from "@/scraper/common/stealth";
 
 type SessionState = "ok" | "expired" | "missing";
@@ -38,6 +40,12 @@ export async function GET() {
     const hasFile = hasStorageState(platform);
     let hasSessionId = false;
     let cookieExpiresAt: string | null = null;
+    let fileMtimeMs: number | null = null;
+    if (hasFile) {
+      try {
+        fileMtimeMs = fs.statSync(statePathFor(platform)).mtimeMs;
+      } catch {}
+    }
 
     if (hasFile) {
       const state = readStorageState(platform);
@@ -106,13 +114,24 @@ export async function GET() {
       }
     }
 
+    // Freshly uploaded cookies beat a stale failure: if the session file was
+    // (re)written AFTER the last failed run, that failure predates the new
+    // cookies and shouldn't paint the badge red until a new scrape says so.
+    // lastFailureAt is a SQLite "YYYY-MM-DD HH:MM:SS" UTC string.
+    const failureMs = lastFailureAt
+      ? new Date(lastFailureAt.replace(" ", "T") + "Z").getTime()
+      : null;
+    const cookiesFresherThanFailure =
+      fileMtimeMs !== null && failureMs !== null && fileMtimeMs > failureMs;
+
     let state: SessionState;
     if (!hasFile || !hasSessionId) {
       state = "missing";
     } else if (
       lastFailureAt &&
       lastError?.includes("NEEDS_MANUAL_SESSION") &&
-      (!lastSuccessAt || lastFailureAt > lastSuccessAt)
+      (!lastSuccessAt || lastFailureAt > lastSuccessAt) &&
+      !cookiesFresherThanFailure
     ) {
       state = "expired";
     } else if (
