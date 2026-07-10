@@ -52,7 +52,27 @@ async function persistDictionary(dictKey: string, options: string[]) {
   });
 }
 
-function useDictionary(dictKey: string): string[] {
+/**
+ * Add a value to a dictionary from outside the select (e.g. the dashboard's
+ * «+ Команда» card). Dedupes case-insensitively; returns the canonical value
+ * (existing casing wins). Keeps the shared module cache in sync so every
+ * mounted DictionarySelect updates immediately.
+ */
+export async function addDictionaryOption(
+  dictKey: string,
+  value: string
+): Promise<string | null> {
+  const v = value.trim();
+  if (!v) return null;
+  await loadDictionaries();
+  const options = cache[dictKey] ?? DICT_DEFAULTS[dictKey] ?? [];
+  const existing = options.find((o) => o.toLowerCase() === v.toLowerCase());
+  if (existing) return existing;
+  await persistDictionary(dictKey, [...options, v]);
+  return v;
+}
+
+export function useDictionary(dictKey: string): string[] {
   const [options, setOptions] = useState<string[]>(
     cache[dictKey] ?? DICT_DEFAULTS[dictKey] ?? []
   );

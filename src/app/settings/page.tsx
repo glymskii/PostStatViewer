@@ -5,6 +5,7 @@ import Header from "../components/Header";
 import SessionsCard from "../components/SessionsCard";
 import TelegramAlertsCard from "../components/TelegramAlertsCard";
 import DictionarySelect from "../components/DictionarySelect";
+import AccountCard from "../components/AccountCard";
 import { DICT_BRANDS_KEY } from "@/lib/dictionaries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,12 +28,43 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
+type Platform = "instagram" | "threads" | "tiktok";
+
+const PLATFORM_LABELS: Record<Platform, string> = {
+  instagram: "Instagram",
+  threads: "Threads",
+  tiktok: "TikTok",
+};
+
+const PLATFORM_PLACEHOLDERS: Record<Platform, string> = {
+  instagram: "https://instagram.com/salam_bro или @salam_bro",
+  threads: "https://threads.com/@salam_bro или @salam_bro",
+  tiktok: "https://tiktok.com/@salam_bro или @salam_bro",
+};
+
+function extractUsername(input: string, platform: Platform): string {
+  let val = input.trim();
+  const patterns: Record<Platform, RegExp> = {
+    instagram: /instagram\.com\/([^/?#]+)/,
+    threads: /threads\.(?:com|net)\/@?([^/?#]+)/,
+    tiktok: /tiktok\.com\/@?([^/?#]+)/,
+  };
+  const m = val.match(patterns[platform]);
+  if (m) val = m[1];
+  return val.replace(/^@/, "").replace(/\/$/, "");
+}
+
 interface Account {
   id: number;
+  platform: Platform;
   username: string;
   clientName: string;
   brand: string | null;
   isActive: boolean;
+  postCount: number;
+  avgViews: number;
+  lastScrapeAt: string | null;
+  lastScrapeStatus: string | null;
 }
 
 interface ScrapeRun {
@@ -54,8 +86,12 @@ const INTERVAL_PRESETS: Record<string, string> = {
 export default function SettingsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [scrapeRuns, setScrapeRuns] = useState<ScrapeRun[]>([]);
+  const [newPlatform, setNewPlatform] = useState<Platform>("instagram");
   const [newUsername, setNewUsername] = useState("");
   const [newClientName, setNewClientName] = useState("");
+  const [newBrand, setNewBrand] = useState<string | null>(null);
+  const [addError, setAddError] = useState("");
+  const [addSuccess, setAddSuccess] = useState("");
   const [interval, setInterval_] = useState("0 3 * * *");
   const [adding, setAdding] = useState(false);
   const [savingInterval, setSavingInterval] = useState(false);
@@ -107,23 +143,47 @@ export default function SettingsPage() {
   async function handleAddAccount(e: React.FormEvent) {
     e.preventDefault();
     if (!newUsername || !newClientName) return;
+    setAddError("");
+    setAddSuccess("");
+
+    const username = extractUsername(newUsername, newPlatform);
+    const duplicate = accounts.find(
+      (a) =>
+        a.platform === newPlatform &&
+        a.username.toLowerCase() === username.toLowerCase()
+    );
+    if (duplicate) {
+      setAddError(
+        `Аккаунт @${username} в ${PLATFORM_LABELS[newPlatform]} уже отслеживается (${duplicate.clientName})`
+      );
+      return;
+    }
+
     setAdding(true);
     try {
       const res = await fetch("/api/accounts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          username: newUsername,
-          clientName: newClientName,
+          platform: newPlatform,
+          username: newUsername.trim(),
+          clientName: newClientName.trim(),
+          brand: newBrand,
         }),
       });
       if (res.ok) {
+        const added = await res.json();
+        setAddSuccess(
+          `Аккаунт @${added.username} (${PLATFORM_LABELS[added.platform as Platform]}) добавлен`
+        );
         setNewUsername("");
         setNewClientName("");
+        setNewBrand(null);
         fetchData();
+        setTimeout(() => setAddSuccess(""), 3000);
       } else {
         const data = await res.json();
-        alert(data.error || "Ошибка");
+        setAddError(data.error || "Ошибка при добавлении");
       }
     } finally {
       setAdding(false);
@@ -215,33 +275,112 @@ export default function SettingsPage() {
             <CardTitle>Добавить аккаунт</CardTitle>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleAddAccount} className="flex gap-4 items-end">
-              <div className="space-y-2">
-                <Label htmlFor="username">Instagram username</Label>
-                <Input
-                  id="username"
-                  placeholder="salam_bro"
-                  value={newUsername}
-                  onChange={(e) => setNewUsername(e.target.value)}
-                  required
-                />
+            <form onSubmit={handleAddAccount} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Платформа</Label>
+                  <Select
+                    value={newPlatform}
+                    onValueChange={(v) => {
+                      if (!v) return;
+                      setNewPlatform(v as Platform);
+                      setAddError("");
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="instagram">Instagram</SelectItem>
+                      <SelectItem value="threads">Threads</SelectItem>
+                      <SelectItem value="tiktok">TikTok</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="username">Ссылка или username</Label>
+                  <Input
+                    id="username"
+                    placeholder={PLATFORM_PLACEHOLDERS[newPlatform]}
+                    value={newUsername}
+                    onChange={(e) => {
+                      setNewUsername(e.target.value);
+                      setAddError("");
+                    }}
+                    required
+                  />
+                  {newUsername && (
+                    <p className="text-xs text-muted-foreground">
+                      Будет отслеживаться:{" "}
+                      <span className="font-medium">
+                        @{extractUsername(newUsername, newPlatform)}
+                      </span>{" "}
+                      в {PLATFORM_LABELS[newPlatform]}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="clientName">Клиент</Label>
+                  <Input
+                    id="clientName"
+                    placeholder="Kex Group"
+                    value={newClientName}
+                    onChange={(e) => setNewClientName(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Бренд</Label>
+                  <DictionarySelect
+                    dictKey={DICT_BRANDS_KEY}
+                    value={newBrand}
+                    onChange={setNewBrand}
+                    className="w-full"
+                    placeholder="Выбрать бренд…"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Все посты аккаунта наследуют бренд
+                  </p>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="clientName">Клиент</Label>
-                <Input
-                  id="clientName"
-                  placeholder="Kex Group"
-                  value={newClientName}
-                  onChange={(e) => setNewClientName(e.target.value)}
-                  required
-                />
-              </div>
+
+              {addError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 rounded-md px-3 py-2 text-sm">
+                  {addError}
+                </div>
+              )}
+              {addSuccess && (
+                <div className="bg-green-50 border border-green-200 text-green-700 rounded-md px-3 py-2 text-sm">
+                  {addSuccess}
+                </div>
+              )}
+
               <Button type="submit" disabled={adding}>
                 {adding ? "Добавление..." : "Добавить"}
               </Button>
             </form>
           </CardContent>
         </Card>
+
+        {/* Account cards (health at a glance) */}
+        {accounts.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {accounts.map((account) => (
+              <AccountCard
+                key={account.id}
+                platform={account.platform}
+                username={account.username}
+                clientName={account.clientName}
+                brand={account.brand}
+                postCount={account.postCount}
+                avgViews={account.avgViews}
+                lastScrapeAt={account.lastScrapeAt}
+                lastScrapeStatus={account.lastScrapeStatus}
+                isActive={account.isActive}
+              />
+            ))}
+          </div>
+        )}
 
         {/* Accounts list */}
         <Card>
