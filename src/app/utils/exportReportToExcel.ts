@@ -22,6 +22,7 @@ export interface ReportPost {
   firstSeenAt: string;
   views: number | null;
   likes: number | null;
+  comments: number | null;
 }
 
 export interface ReportGroup {
@@ -31,6 +32,7 @@ export interface ReportGroup {
   totalViews: number;
   avgViews: number;
   totalLikes: number;
+  totalComments: number | null;
   posts: ReportPost[];
 }
 
@@ -39,6 +41,7 @@ export interface ReportTotals {
   totalViews: number;
   avgViews: number;
   totalLikes: number;
+  totalComments: number | null;
 }
 
 function formatDateTime(s: string | null | undefined): string {
@@ -77,6 +80,8 @@ export function exportReportToExcel(opts: {
 }): void {
   const { from, to, groups, totals } = opts;
 
+  const dash = (n: number | null): number | string => (n === null ? "—" : n);
+
   // --- Sheet 1: Summary (groups)
   const summaryHeader = [
     "Бренд",
@@ -85,6 +90,7 @@ export function exportReportToExcel(opts: {
     "Просмотры",
     "Ср. просмотры",
     "Лайки",
+    "Комментарии",
   ];
   const summaryRows: (string | number)[][] = [
     ["Отчёт за период", `${formatDate(from)} — ${formatDate(to)}`],
@@ -98,6 +104,7 @@ export function exportReportToExcel(opts: {
       g.totalViews,
       g.avgViews,
       g.totalLikes,
+      dash(g.totalComments),
     ]),
     [
       "ИТОГО",
@@ -106,6 +113,7 @@ export function exportReportToExcel(opts: {
       totals.totalViews,
       totals.avgViews,
       totals.totalLikes,
+      dash(totals.totalComments),
     ],
   ];
   const summarySheet = XLSX.utils.aoa_to_sheet(summaryRows);
@@ -116,6 +124,7 @@ export function exportReportToExcel(opts: {
     { wch: 14 }, // Просмотры
     { wch: 14 }, // Ср. просмотры
     { wch: 12 }, // Лайки
+    { wch: 14 }, // Комментарии
   ];
 
   // --- Sheet 2: Posts (flat)
@@ -128,6 +137,7 @@ export function exportReportToExcel(opts: {
     "Описание",
     "Просмотры",
     "Лайки",
+    "Комментарии",
     "Первая фиксация",
     "Ссылка",
   ];
@@ -143,6 +153,7 @@ export function exportReportToExcel(opts: {
         post.caption ?? "",
         post.views ?? "",
         post.likes ?? "",
+        post.comments ?? "",
         formatDateTime(post.firstSeenAt),
         post.postUrl,
       ]);
@@ -158,6 +169,7 @@ export function exportReportToExcel(opts: {
     { wch: 50 }, // Описание
     { wch: 12 }, // Просмотры
     { wch: 10 }, // Лайки
+    { wch: 12 }, // Комментарии
     { wch: 18 }, // Первая фиксация
     { wch: 55 }, // Ссылка
   ];

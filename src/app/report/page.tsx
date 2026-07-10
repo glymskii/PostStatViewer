@@ -124,10 +124,15 @@ export default function ReportPage() {
       if (teamFilter !== "__all__" && tLabel !== teamFilter) return false;
       return true;
     });
+    const commentGroups = groups.filter((g) => g.totalComments !== null);
     const totals: ReportTotals = {
       postsCount: groups.reduce((s, g) => s + g.postsCount, 0),
       totalViews: groups.reduce((s, g) => s + g.totalViews, 0),
       totalLikes: groups.reduce((s, g) => s + g.totalLikes, 0),
+      totalComments:
+        commentGroups.length > 0
+          ? commentGroups.reduce((s, g) => s + (g.totalComments ?? 0), 0)
+          : null,
       avgViews: 0,
     };
     totals.avgViews =
@@ -270,7 +275,7 @@ export default function ReportPage() {
         </Card>
 
         {/* Totals cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-muted-foreground">
@@ -317,6 +322,20 @@ export default function ReportPage() {
               </p>
             </CardContent>
           </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-muted-foreground">
+                Комментарии
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold">
+                {filteredTotals.totalComments !== null
+                  ? formatNumber(filteredTotals.totalComments)
+                  : "—"}
+              </p>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Grouped table */}
@@ -342,6 +361,7 @@ export default function ReportPage() {
                     <TableHead className="text-right">Просмотры</TableHead>
                     <TableHead className="text-right">Ср. просмотры</TableHead>
                     <TableHead className="text-right">Лайки</TableHead>
+                    <TableHead className="text-right">Комменты</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -383,6 +403,11 @@ export default function ReportPage() {
                           <TableCell className="text-right">
                             {formatNumber(g.totalLikes)}
                           </TableCell>
+                          <TableCell className="text-right">
+                            {g.totalComments !== null
+                              ? formatNumber(g.totalComments)
+                              : "—"}
+                          </TableCell>
                         </TableRow>
                         {isOpen &&
                           g.posts.map((post) => (
@@ -421,6 +446,11 @@ export default function ReportPage() {
                                   ? formatNumber(post.likes)
                                   : "—"}
                               </TableCell>
+                              <TableCell className="text-right">
+                                {post.comments !== null
+                                  ? formatNumber(post.comments)
+                                  : "—"}
+                              </TableCell>
                             </TableRow>
                           ))}
                       </Fragment>
@@ -441,6 +471,11 @@ export default function ReportPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       {formatNumber(filteredTotals.totalLikes)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {filteredTotals.totalComments !== null
+                        ? formatNumber(filteredTotals.totalComments)
+                        : "—"}
                     </TableCell>
                   </TableRow>
                 </TableBody>

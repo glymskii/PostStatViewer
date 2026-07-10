@@ -30,6 +30,7 @@ export interface ExportPost {
   firstSeenAt: string;
   currentViews: number | null;
   currentLikes: number | null;
+  currentComments?: number | null;
   snapshots: ExportSnapshot[];
 }
 
@@ -86,6 +87,11 @@ export function exportAccountToExcel(opts: {
   );
   const avgViews = posts.length > 0 ? Math.round(totalViews / posts.length) : 0;
   const avgLikes = posts.length > 0 ? Math.round(totalLikes / posts.length) : 0;
+  const commentPosts = posts.filter((p) => p.currentComments != null);
+  const totalComments =
+    commentPosts.length > 0
+      ? commentPosts.reduce((sum, p) => sum + (p.currentComments ?? 0), 0)
+      : null;
 
   // --- Sheet 1: Summary
   const summaryRows: (string | number)[][] = [
@@ -101,6 +107,7 @@ export function exportAccountToExcel(opts: {
     ["Средние просмотры", avgViews],
     ["Сумма лайков", totalLikes],
     ["Средние лайки", avgLikes],
+    ["Сумма комментариев", totalComments ?? "—"],
   ];
   const summarySheet = XLSX.utils.aoa_to_sheet(summaryRows);
   // Wider first column.
@@ -119,6 +126,7 @@ export function exportAccountToExcel(opts: {
     "Описание",
     "Просмотры",
     "Лайки",
+    "Комментарии",
     "Замеров",
     "Первая фиксация",
     "Последний замер",
@@ -137,6 +145,7 @@ export function exportAccountToExcel(opts: {
       p.caption || "",
       p.currentViews ?? "",
       p.currentLikes ?? "",
+      p.currentComments ?? "",
       p.snapshots.length,
       formatDateTime(p.firstSeenAt),
       formatDateTime(lastSnapshotAt),
@@ -152,6 +161,7 @@ export function exportAccountToExcel(opts: {
     { wch: 60 }, // Описание
     { wch: 12 }, // Просмотры
     { wch: 10 }, // Лайки
+    { wch: 12 }, // Комментарии
     { wch: 10 }, // Замеров
     { wch: 18 }, // Первая фиксация
     { wch: 18 }, // Последний замер

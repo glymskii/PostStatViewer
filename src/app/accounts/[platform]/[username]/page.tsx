@@ -60,6 +60,7 @@ interface PostData {
   firstSeenAt: string;
   currentViews: number | null;
   currentLikes: number | null;
+  currentComments: number | null;
   snapshots: Snapshot[];
 }
 
