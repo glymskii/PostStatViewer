@@ -21,6 +21,8 @@ interface PostData {
   caption: string | null;
   thumbnailUrl: string | null;
   team: string | null;
+  /** Per-post platform for cross-platform grids (team page). Falls back to the grid-level prop. */
+  platform?: Platform;
   currentViews: number | null;
   currentLikes: number | null;
   firstSeenAt: string;
@@ -226,7 +228,6 @@ export default function ReelTable({
   platform,
   onTeamChange,
 }: ReelTableProps) {
-  const itemLabel = ITEM_LABEL[platform];
   const sorted = [...posts].sort(
     (a, b) => (b.currentViews ?? 0) - (a.currentViews ?? 0)
   );
@@ -243,6 +244,8 @@ export default function ReelTable({
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
       {sorted.map((post, index) => {
         const rank = index + 1;
+        const postPlatform = post.platform ?? platform;
+        const itemLabel = ITEM_LABEL[postPlatform];
 
         return (
           <a
@@ -253,7 +256,7 @@ export default function ReelTable({
             className="block"
           >
             <Card className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer group">
-              {platform === "threads" ? (
+              {postPlatform === "threads" ? (
                 <>
                   {/* Threads: text-focused layout, optional thumbnail */}
                   <div className="relative p-4 min-h-[200px] flex flex-col">
@@ -295,7 +298,7 @@ export default function ReelTable({
                     <div className="mt-3">
                       <MiniViewChart
                         snapshots={post.snapshots}
-                        colorClass={PLATFORM_LINE_COLOR[platform]}
+                        colorClass={PLATFORM_LINE_COLOR[postPlatform]}
                       />
                     </div>
 
@@ -330,7 +333,7 @@ export default function ReelTable({
                     <div className="mt-2 pt-2 border-t border-gray-100">
                       <MiniViewChart
                         snapshots={post.snapshots}
-                        colorClass={PLATFORM_LINE_COLOR[platform]}
+                        colorClass={PLATFORM_LINE_COLOR[postPlatform]}
                       />
                     </div>
                     <TeamRow
@@ -365,7 +368,7 @@ export default function ReelTable({
                     <div className="mt-3">
                       <MiniViewChart
                         snapshots={post.snapshots}
-                        colorClass={PLATFORM_LINE_COLOR[platform]}
+                        colorClass={PLATFORM_LINE_COLOR[postPlatform]}
                       />
                     </div>
 

@@ -17,6 +17,9 @@ export async function POST(request: NextRequest) {
   const accountId: number | undefined = body.accountId;
   // Accept both `postUrl` (v2) and legacy `reelUrl` (v1) field names.
   const url: string | undefined = body.postUrl || body.reelUrl;
+  // Optional: assign the post to a team on creation (team page add-post flow).
+  const team: string | null =
+    typeof body.team === "string" && body.team.trim() ? body.team.trim() : null;
 
   if (!accountId || !url) {
     return NextResponse.json(
@@ -66,6 +69,18 @@ export async function POST(request: NextRequest) {
   const result = await scrapeAndPersistSingleItem(account.id, url);
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 500 });
+  }
+
+  if (team) {
+    db.update(posts)
+      .set({ team })
+      .where(
+        and(
+          eq(posts.accountId, account.id),
+          eq(posts.externalId, parsed.externalId)
+        )
+      )
+      .run();
   }
 
   const created = db
