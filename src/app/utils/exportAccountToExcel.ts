@@ -26,6 +26,7 @@ export interface ExportPost {
   postUrl: string;
   caption: string | null;
   thumbnailUrl?: string | null;
+  team?: string | null;
   firstSeenAt: string;
   currentViews: number | null;
   currentLikes: number | null;
@@ -35,6 +36,7 @@ export interface ExportPost {
 export interface ExportAccount {
   username: string;
   clientName: string;
+  brand?: string | null;
   platform: Platform;
 }
 
@@ -89,6 +91,7 @@ export function exportAccountToExcel(opts: {
   const summaryRows: (string | number)[][] = [
     ["Аккаунт", `@${account.username}`],
     ["Клиент", account.clientName],
+    ["Бренд", account.brand ?? "—"],
     ["Платформа", PLATFORM_LABELS[account.platform]],
     ["Период (дней)", periodDays],
     ["Дата выгрузки", formatDateTime(new Date().toISOString())],
@@ -112,6 +115,7 @@ export function exportAccountToExcel(opts: {
     "Ранг",
     "ID",
     "Тип",
+    "Команда",
     "Описание",
     "Просмотры",
     "Лайки",
@@ -129,6 +133,7 @@ export function exportAccountToExcel(opts: {
       idx + 1,
       p.externalId,
       itemLabel,
+      p.team ?? "",
       p.caption || "",
       p.currentViews ?? "",
       p.currentLikes ?? "",
@@ -143,6 +148,7 @@ export function exportAccountToExcel(opts: {
     { wch: 6 }, // Ранг
     { wch: 16 }, // ID
     { wch: 8 }, // Тип
+    { wch: 14 }, // Команда
     { wch: 60 }, // Описание
     { wch: 12 }, // Просмотры
     { wch: 10 }, // Лайки

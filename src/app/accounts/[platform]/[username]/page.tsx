@@ -220,6 +220,7 @@ export default function AccountPage() {
                   account: {
                     username,
                     clientName: accountInfo.clientName,
+                    brand: accountInfo.brand,
                     platform,
                   },
                   posts,
